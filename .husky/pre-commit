@@ -1,0 +1,2 @@
+echo "🚀 Running Build"
+npm run build 

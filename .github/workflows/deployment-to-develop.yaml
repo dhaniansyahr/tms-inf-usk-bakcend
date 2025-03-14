@@ -1,0 +1,125 @@
+# This workflow will do a clean install of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
+
+name: Deploy to Develop Server
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: "mysql:5.7"
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: test
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+    steps:
+      # Downloads a copy of the code in your repository before running CI tests
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      # Performs a clean installation of all dependencies in the `package.json` file
+      # For more information, see https://docs.npmjs.com/cli/ci.html
+      - name: Install dependencies
+        run: npm ci
+      #Performs Unit Testing
+      - name: Run DB Migration
+        run: npx prisma migrate dev --name ciTestMigration
+        env:
+          DATABASE_URL: "mysql://root:@127.0.0.1:3306/test?schema=public"
+      - name: Run Build
+        run: npm run build
+
+  deploy:
+    needs: [test]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH to Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd /home/${{ secrets.USERNAME }}<project_name>/backend
+
+      - name: Fetch Code and Reset Directory
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd /home/${{ secrets.USERNAME }}<project_name>/backend 
+            git add . && git stash && git fetch origin develop && git pull
+        continue-on-error: false
+
+      - name: Install dependencies
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd /home/${{ secrets.USERNAME }}<project_name>/backend 
+            npm install
+          continue-on-error: false
+
+      - name: Deploy Migration to Database
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd /home/${{ secrets.USERNAME }}<project_name>/backend
+            npx prisma migrate deploy
+          continue-on-error: false
+
+      - name: Re-Generate Prisma Schema
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd /home/${{ secrets.USERNAME }}<project_name>/backend 
+            npx prisma generate
+          continue-on-error: false
+
+      - name: Re-Seed Database
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd /home/${{ secrets.USERNAME }}<project_name>/backend 
+            npm run seed
+          continue-on-error: false
+
+      - name: Restart PM2 Process
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd /home/${{ secrets.USERNAME }}<project_name>/backend 
+            pm2 restart process-name
+          continue-on-error: false

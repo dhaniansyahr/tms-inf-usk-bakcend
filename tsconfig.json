@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "commonjs",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "noUnusedLocals": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "baseUrl": "src",
+    "paths": {
+      "$routes/*": ["routes/*"],
+      "$controllers/*": ["controllers/*"],
+      "$services/*": ["services/*"],
+      "$validations/*": ["validations/*"],
+      "$utils/*": ["utils/*"],
+      "$entities/*": ["entities/*"],
+      "$middlewares/*": ["middlewares/*"],
+      "$seeders/*": ["seeders/*"],
+      "$config/*": ["config/*"],
+      "$pkg/*": ["pkg/*"],
+      "$app/*": ["app/*"],
+      "$server/*": ["server/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules/*", "dist/*", "prisma/*"]
+}

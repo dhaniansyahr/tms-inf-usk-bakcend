@@ -12,8 +12,8 @@ datasource db {
 }
 
 enum TYPE_MATKUL {
-  TEORI
-  PRAKTIKUM
+  WAJIB
+  PILIHAN
 }
 
 enum ASISTEN_LAB_STATUS {
@@ -52,7 +52,7 @@ model Dosen {
   id              String            @id
   nama            String
   email           String
-  nip             String
+  nip             String            @unique
   userId          String            @unique
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -113,7 +113,7 @@ model DosenPengampuMK {
   id           String     @id
   dosenId      String
   matakuliahId String
-  dosen        Dosen      @relation(fields: [dosenId], references: [id])
+  dosen        Dosen?     @relation(fields: [dosenId], references: [id])
   matakuliah   Matakuliah @relation(fields: [matakuliahId], references: [id])
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -138,7 +138,7 @@ model AsistenLab {
 model Mahasiswa {
   id        String   @id
   nama      String
-  npm       String
+  npm       String   @unique
   semester  Int
   isActive  Boolean
   userId    String   @unique
@@ -179,14 +179,14 @@ model RuanganLaboratorium {
   id                 String    @id
   nama               String
   lokasi             String
-  namaKepalaLab      String
-  nipKepalaLab       String
+  namaKepalaLab      String?
+  nipKepalaLab       String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   deletedAt          DateTime?
-  histroyKepalaLabId String
+  histroyKepalaLabId String?
 
-  historyKepalaLab HistoryKepalaLab   @relation("currentLab", fields: [histroyKepalaLabId], references: [id])
+  historyKepalaLab HistoryKepalaLab?  @relation("currentLab", fields: [histroyKepalaLabId], references: [id])
   historyLabs      HistoryKepalaLab[] @relation("historyLabs")
 
   jadwal Jadwal[]
@@ -201,7 +201,7 @@ model HistoryKepalaLab {
   updatedAt    DateTime @updatedAt
 
   currentLab RuanganLaboratorium[] @relation("currentLab")
-  ruanganLab RuanganLaboratorium   @relation("historyLabs", fields: [ruanganLabId], references: [id])
+  ruanganLab RuanganLaboratorium?  @relation("historyLabs", fields: [ruanganLabId], references: [id])
 }
 
 model Holidays {
@@ -227,12 +227,13 @@ model Absensi {
 }
 
 model Shift {
-  id        String   @id
+  id        String    @id
   startTime String
   endTime   String
   isActive  Boolean
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   jadwal Jadwal[]
 }

@@ -4,7 +4,7 @@ import { Context, Next } from "hono";
 import { UserJWTDAO } from "$entities/User";
 import { prisma } from "$utils/prisma.utils";
 
-export function checkJwt(c: Context, next: Next) {
+export async function checkJwt(c: Context, next: Next) {
     const token = c.req.header("Authorization")?.split(" ")[1];
     const JWT_SECRET = process.env.JWT_SECRET ?? "";
     if (!token) {
@@ -18,7 +18,7 @@ export function checkJwt(c: Context, next: Next) {
         console.log(err);
         return response_unauthorized(c, (err as Error).message);
     }
-    next();
+    await next();
 }
 
 export function checkAccess(featureName: string, action: string) {

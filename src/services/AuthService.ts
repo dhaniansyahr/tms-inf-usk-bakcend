@@ -6,27 +6,32 @@ import { prisma } from "$utils/prisma.utils";
 import Logger from "$pkg/logger";
 import bcrypt from "bcrypt";
 
-function createToken(user: User, refreshToken: boolean = false) {
+function createToken(user: User, expiresIn: number = 3600) {
     const jwtPayload = exclude(user, "password") as unknown as UserJWTDAO;
-    const token = jwt.sign(jwtPayload, process.env.JWT_SECRET ?? "", { expiresIn: 3600 });
+    const token = jwt.sign(jwtPayload, process.env.JWT_SECRET ?? "", { expiresIn });
     return token;
 }
 
 export async function logIn(data: UserLoginDTO): Promise<ServiceResponse<any>> {
     try {
-        const { email, password } = data;
+        const { identity, password } = data;
 
-        const user: any = await prisma.user.findUnique({
+        const user: any = await prisma.user.findFirst({
             where: {
-                email,
+                OR: [{ email: identity }, { mahasiswa: { npm: identity } }, { dosen: { nip: identity } }],
+            },
+            include: {
+                userLevel: true,
+                mahasiswa: true,
+                dosen: true,
             },
         });
 
-        const isPasswordVerified = await bcrypt.compareSync(password, user.password);
+        const isPasswordVerified = await bcrypt.compareSync(password, user?.password);
 
         if (user && isPasswordVerified) {
-            const token = createToken(user);
-            const refreshToken = createToken(user, true);
+            const token = createToken(user, 60 * 60 * 24);
+            const refreshToken = createToken(user, 60 * 60 * 24 * 3);
             return { status: true, data: { user: exclude(user, "password"), token, refreshToken } };
         } else {
             return {
@@ -53,7 +58,7 @@ export async function register(data: UserRegisterDTO): Promise<ServiceResponse<a
         });
 
         const token = createToken(newUser);
-        const refreshToken = createToken(newUser, true);
+        const refreshToken = createToken(newUser, 60 * 60 * 24 * 3);
 
         return {
             status: true,

@@ -17,6 +17,9 @@ router.route("/users", RoutesRegistry.UserRoutes);
 
 router.route("/shifts", RoutesRegistry.ShiftRoutes);
 router.route("/ruangan-laboratorium", RoutesRegistry.RuanganLaboratoriumRoutes);
+router.route("/jadwal", RoutesRegistry.JadwalRoutes);
+router.route("/user-levels", RoutesRegistry.UserLevelsRoutes);
+router.route("/acl", RoutesRegistry.AclRoutes);
 
 router.get("/", (c: Context) => {
     return response_success(c, "main routes!");

@@ -22,55 +22,28 @@ enum ASISTEN_LAB_STATUS {
   DISETUJUI
 }
 
-model Matakuliah {
-  id              String            @id
-  nama            String
-  kode            String            @unique
-  type            TYPE_MATKUL
-  sks             Int
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  dosenPengampuMK DosenPengampuMK[]
-  jadwal          Jadwal[]
-}
-
 model User {
-  id          String     @id
+  id          String   @id
   fullName    String
-  email       String     @unique
+  email       String   @unique
   password    String
   userLevelId String
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  userLevel   UserLevels @relation(fields: [userLevelId], references: [id])
-  dosen       Dosen?
-  mahasiswa   Mahasiswa?
-  absensi     Absensi[]
-}
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-model Dosen {
-  id              String            @id
-  nama            String
-  email           String
-  nip             String            @unique
-  userId          String            @unique
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  user            User              @relation(fields: [userId], references: [id])
-  dosenPengampuMK DosenPengampuMK[]
-  jadwalDosen     Jadwal[]
-
-  asistenLabId String?
-  AsistenLab   AsistenLab? @relation(fields: [asistenLabId], references: [id])
+  userLevel UserLevels @relation(fields: [userLevelId], references: [id])
 }
 
 model UserLevels {
-  id        String   @id
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  users     User[]
-  acl       Acl[]
+  id         String       @id
+  name       String       @unique
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  users      User[]
+  acl        Acl[]
+  Dosen      Dosen[]
+  AsistenLab AsistenLab[]
+  Mahasiswa  Mahasiswa[]
 }
 
 model Features {
@@ -119,6 +92,35 @@ model DosenPengampuMK {
   updatedAt    DateTime   @updatedAt
 }
 
+model Matakuliah {
+  id              String            @id
+  nama            String
+  kode            String            @unique
+  type            TYPE_MATKUL
+  sks             Int
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  dosenPengampuMK DosenPengampuMK[]
+  jadwal          Jadwal[]
+}
+
+model Dosen {
+  id          String   @id
+  nama        String
+  email       String
+  password    String
+  nip         String   @unique
+  userLevelId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userLevel UserLevels @relation(fields: [userLevelId], references: [id])
+
+  dosenPengampuMK DosenPengampuMK[]
+  jadwalDosen     Jadwal[]
+  absensi         Absensi[]
+}
+
 model AsistenLab {
   id          String             @id
   mahasiswaId String
@@ -126,40 +128,46 @@ model AsistenLab {
   status      ASISTEN_LAB_STATUS
   semester    Int
   tahun       String
+  userLevelId String
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   deletedAt   DateTime?
 
-  Dosen     Dosen[]
+  userLevel UserLevels @relation(fields: [userLevelId], references: [id])
+
   Mahasiswa Mahasiswa[]
   Jadwal    Jadwal[]
 }
 
 model Mahasiswa {
-  id        String   @id
-  nama      String
-  npm       String   @unique
-  semester  Int
-  isActive  Boolean
-  userId    String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id
+  nama        String
+  npm         String   @unique
+  semester    Int
+  password    String
+  tahunMasuk  String
+  isActive    Boolean
+  userLevelId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  user         User        @relation(fields: [userId], references: [id])
   asistenLab   AsistenLab? @relation(fields: [asistenLabId], references: [id])
   asistenLabId String?
 
-  jadwal Jadwal[]
+  jadwal  Jadwal[]
+  Absensi Absensi[]
+
+  userLevel UserLevels @relation(fields: [userLevelId], references: [id])
 }
 
 model Jadwal {
   id           String    @id
-  date         String
+  day          String
   shiftId      String
   ruanganId    String
   dosenId      String
-  asistenLabId String
-  mahasiswaId  String
+  asistenLabId String?
+  mahasiswaId  String?
   matakuliahId String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -168,8 +176,8 @@ model Jadwal {
   shift      Shift               @relation(fields: [shiftId], references: [id])
   ruangan    RuanganLaboratorium @relation(fields: [ruanganId], references: [id])
   dosen      Dosen               @relation(fields: [dosenId], references: [id])
-  asisten    AsistenLab          @relation(fields: [asistenLabId], references: [id])
-  mahasiswa  Mahasiswa           @relation(fields: [mahasiswaId], references: [id])
+  asisten    AsistenLab?         @relation(fields: [asistenLabId], references: [id])
+  mahasiswa  Mahasiswa?          @relation(fields: [mahasiswaId], references: [id])
   matakuliah Matakuliah          @relation(fields: [matakuliahId], references: [id])
 
   Absensi Absensi?
@@ -215,25 +223,26 @@ model Holidays {
 }
 
 model Absensi {
-  id        String    @id
-  userId    String
-  jadwalId  String    @unique
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id          String    @id
+  mahasiswaId String
+  jadwalId    String    @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
-  user   User   @relation(fields: [userId], references: [id])
-  jadwal Jadwal @relation(fields: [jadwalId], references: [id])
+  mahasiswa Mahasiswa @relation(fields: [mahasiswaId], references: [id])
+  jadwal    Jadwal    @relation(fields: [jadwalId], references: [id])
+  Dosen     Dosen?    @relation(fields: [dosenId], references: [id])
+  dosenId   String?
 }
 
 model Shift {
-  id        String    @id
+  id        String   @id
   startTime String
   endTime   String
   isActive  Boolean
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   jadwal Jadwal[]
 }

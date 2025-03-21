@@ -1,30 +1,26 @@
-
-import {Hono} from "hono"
-import * as UserController from "$controllers/rest/UserController"
+import { Hono } from "hono";
+import * as UserController from "$controllers/rest/UserController";
+import * as AuthMiddleware from "$middlewares/authMiddleware";
+import * as UserValidation from "$validations/UserValidation";
 
 const UserRoutes = new Hono();
 
+UserRoutes.get("/", AuthMiddleware.checkJwt, UserController.getAll);
 
-UserRoutes.get("/",
-    UserController.getAll
-)
+UserRoutes.get("/mahasiswa", AuthMiddleware.checkJwt, UserController.getAllMahasiswa);
 
+UserRoutes.get("/dosen", AuthMiddleware.checkJwt, UserController.getAllDosen);
 
-UserRoutes.get("/:id",
-    UserController.getById
-)
+UserRoutes.get("/mahasiswa/:id", AuthMiddleware.checkJwt, UserController.getByIdMahasiswa);
 
+UserRoutes.get("/dosen/:id", AuthMiddleware.checkJwt, UserController.getByIdDosen);
 
-UserRoutes.post("/",
-    UserController.create
-)
+UserRoutes.get("/:id", AuthMiddleware.checkJwt, UserController.getById);
 
-UserRoutes.put("/:id",
-    UserController.update
-)
+UserRoutes.post("/", AuthMiddleware.checkJwt, UserValidation.validateUser, UserController.create);
 
-UserRoutes.delete("/",
-    UserController.deleteByIds
-)
+UserRoutes.put("/:id", AuthMiddleware.checkJwt, UserValidation.validateUser, UserController.update);
 
-export default UserRoutes
+UserRoutes.delete("/", AuthMiddleware.checkJwt, UserController.deleteByIds);
+
+export default UserRoutes;

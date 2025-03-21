@@ -8,26 +8,32 @@ export async function seedRuangan(prisma: PrismaClient) {
         const historyKepalaLab = await prisma.historyKepalaLab.count();
 
         if (historyKepalaLab === 0) {
-            const historyKepalaLab = await prisma.historyKepalaLab.create({
+            const ruangan = await prisma.ruanganLaboratorium.create({
                 data: {
                     id: ulid(),
-                    nama: "Kepala Lab 1",
-                    nip: Math.floor(Math.random() * 10000000000000000)
-                        .toString()
-                        .padStart(16, "0"),
-                    ruanganLabId: ulid(),
+                    nama: "Lab. Database",
+                    lokasi: "Gedung A, Lantai 3",
                 },
             });
 
-            if (historyKepalaLab) {
-                await prisma.ruanganLaboratorium.create({
+            if (ruangan) {
+                const kepalaLab = await prisma.historyKepalaLab.create({
                     data: {
                         id: ulid(),
-                        nama: "Lab. Database",
-                        lokasi: "Gedung A, Lantai 3",
-                        namaKepalaLab: historyKepalaLab.nama,
-                        nipKepalaLab: historyKepalaLab.nip,
-                        histroyKepalaLabId: historyKepalaLab.id,
+                        nama: "Kepala Lab 1",
+                        nip: Math.floor(Math.random() * 10000000000000000)
+                            .toString()
+                            .padStart(16, "0"),
+                        ruanganLabId: ruangan.id,
+                    },
+                });
+
+                await prisma.ruanganLaboratorium.update({
+                    where: { id: ruangan.id },
+                    data: {
+                        histroyKepalaLabId: kepalaLab.id,
+                        namaKepalaLab: kepalaLab.nama,
+                        nipKepalaLab: kepalaLab.nip,
                     },
                 });
             }

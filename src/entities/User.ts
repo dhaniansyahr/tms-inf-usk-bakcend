@@ -10,7 +10,7 @@ export interface UserJWTDAO {
 }
 
 export interface UserLoginDTO {
-    email: string;
+    identity: string;
     password: string;
 }
 

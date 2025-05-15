@@ -5,7 +5,12 @@ import * as UserValidation from "$validations/UserValidation";
 
 const UserRoutes = new Hono();
 
-UserRoutes.get("/", AuthMiddleware.checkJwt, UserController.getAll);
+UserRoutes.get(
+    "/",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("USER_MANAGEMENT", "read"),
+    UserController.getAll
+);
 
 UserRoutes.get("/mahasiswa", AuthMiddleware.checkJwt, UserController.getAllMahasiswa);
 

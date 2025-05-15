@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `PendaftaranAsistenLab` MODIFY `status` ENUM('DITOLAK', 'PENDING', 'DISETUJUI') NOT NULL DEFAULT 'PENDING';

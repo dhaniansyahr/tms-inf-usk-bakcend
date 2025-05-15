@@ -125,7 +125,6 @@ export async function deleteByIds(ids: string): Promise<ServiceResponse<{}>> {
                 },
                 data: {
                     isActive: false,
-                    deletedAt: new Date(),
                 },
             });
         });

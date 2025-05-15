@@ -4,7 +4,7 @@ import RuanganLaboratoriumRoutes from "./RuanganLaboratorium";
 import JadwalRoutes from "./Jadwal";
 import UserLevelsRoutes from "./UserLevels";
 import AclRoutes from "./Acl";
-
+import PendaftaranAsistenLabRoutes from "./PendaftaranAsistenLab";
 const RoutesRegistry = {
     UserRoutes,
     ShiftRoutes,
@@ -12,6 +12,7 @@ const RoutesRegistry = {
     JadwalRoutes,
     UserLevelsRoutes,
     AclRoutes,
+    PendaftaranAsistenLabRoutes,
 };
 
 export default RoutesRegistry;

@@ -22,6 +22,16 @@ enum ASISTEN_LAB_STATUS {
   DISETUJUI
 }
 
+enum NILAI_MATAKULIAH {
+  A
+  AB
+  B
+  BC
+  C
+  D
+  E
+}
+
 model User {
   id          String   @id
   fullName    String
@@ -93,15 +103,16 @@ model DosenPengampuMK {
 }
 
 model Matakuliah {
-  id              String            @id
-  nama            String
-  kode            String            @unique
-  type            TYPE_MATKUL
-  sks             Int
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  dosenPengampuMK DosenPengampuMK[]
-  jadwal          Jadwal[]
+  id                    String                  @id
+  nama                  String
+  kode                  String                  @unique
+  type                  TYPE_MATKUL
+  sks                   Int
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  dosenPengampuMK       DosenPengampuMK[]
+  jadwal                Jadwal[]
+  PendaftaranAsistenLab PendaftaranAsistenLab[]
 }
 
 model Dosen {
@@ -122,21 +133,36 @@ model Dosen {
 }
 
 model AsistenLab {
-  id          String             @id
+  id          String    @id
   mahasiswaId String
   jadwalId    String
-  status      ASISTEN_LAB_STATUS
   semester    Int
   tahun       String
   userLevelId String
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
   userLevel UserLevels @relation(fields: [userLevelId], references: [id])
 
   Mahasiswa Mahasiswa[]
   Jadwal    Jadwal[]
+}
+
+model PendaftaranAsistenLab {
+  id             String             @id
+  mahasiswaId    String
+  matakuliahId   String
+  nilaiTeori     NILAI_MATAKULIAH
+  nilaiPraktikum NILAI_MATAKULIAH
+  nilaiAkhir     NILAI_MATAKULIAH
+  status         ASISTEN_LAB_STATUS @default(PENDING)
+  keterangan     String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  mahasiswa  Mahasiswa  @relation(fields: [mahasiswaId], references: [id])
+  matakuliah Matakuliah @relation(fields: [matakuliahId], references: [id])
 }
 
 model Mahasiswa {
@@ -157,7 +183,8 @@ model Mahasiswa {
   jadwal  Jadwal[]
   Absensi Absensi[]
 
-  userLevel UserLevels @relation(fields: [userLevelId], references: [id])
+  userLevel             UserLevels              @relation(fields: [userLevelId], references: [id])
+  PendaftaranAsistenLab PendaftaranAsistenLab[]
 }
 
 model Jadwal {

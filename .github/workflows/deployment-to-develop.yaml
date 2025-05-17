@@ -121,5 +121,5 @@ jobs:
                                   port: ${{ secrets.PORT }}
                                   script: |
                                           cd tms-inf/backend
-                                          pm2 restart process-name
+                                          pm2 restart tms-inf-backend
                                   continue-on-error: false

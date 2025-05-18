@@ -187,12 +187,20 @@ model Mahasiswa {
   PendaftaranAsistenLab PendaftaranAsistenLab[]
 }
 
+enum SEMESTER {
+  GANJIL
+  GENAP
+}
+
 model Jadwal {
   id           String    @id
-  day          String
+  hari         String
   shiftId      String
   ruanganId    String
   dosenId      String
+  semester     SEMESTER
+  tahun        String
+  isOverride   Boolean?
   asistenLabId String?
   mahasiswaId  String?
   matakuliahId String
@@ -208,6 +216,18 @@ model Jadwal {
   matakuliah Matakuliah          @relation(fields: [matakuliahId], references: [id])
 
   Absensi Absensi?
+  Meeting Meeting[]
+}
+
+model Meeting {
+  id        String   @id
+  jadwalId  String?
+  tanggal   String
+  pertemuan Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jadwal Jadwal? @relation(fields: [jadwalId], references: [id])
 }
 
 model RuanganLaboratorium {

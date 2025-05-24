@@ -46,7 +46,7 @@ export async function create(data: JadwalDTO): Promise<ServiceResponse<CreateRes
 }
 
 export type GetAllResponse = PagedList<Jadwal[]> | {};
-export async function getAll(filters: FilteringQueryV2): Promise<ServiceResponse<GetAllResponse>> {
+export async function getAll(filters: FilteringQueryV2, type: string): Promise<ServiceResponse<GetAllResponse>> {
         try {
                 const usedFilters = buildFilterQueryLimitOffsetV2(filters);
 
@@ -56,6 +56,14 @@ export async function getAll(filters: FilteringQueryV2): Promise<ServiceResponse
                         dosen: true,
                         matakuliah: true,
                 };
+
+                let schedules: any[];
+
+                if (type === "TABLE") {
+                        usedFilters.take;
+                } else {
+                        usedFilters.take = 10000;
+                }
 
                 const [jadwal, totalData] = await Promise.all([
                         prisma.jadwal.findMany({
@@ -72,10 +80,37 @@ export async function getAll(filters: FilteringQueryV2): Promise<ServiceResponse
                 let totalPage = 1;
                 if (totalData > usedFilters.take) totalPage = Math.ceil(totalData / usedFilters.take);
 
+                const dayGroups = new Map<string, any[]>();
+
+                jadwal.forEach((schedule) => {
+                        const day = schedule.hari;
+                        if (!dayGroups.has(day)) {
+                                dayGroups.set(day, []);
+                        }
+                        dayGroups.get(day)!.push(schedule);
+                });
+
+                const groupedByDay = Array.from(dayGroups.entries())
+                        .map(([hari, schedules]) => ({
+                                hari,
+                                schedules,
+                        }))
+                        .sort((a, b) => {
+                                const indexA = HARI_LIST.indexOf(a.hari as HARI);
+                                const indexB = HARI_LIST.indexOf(b.hari as HARI);
+                                return indexA - indexB;
+                        });
+
+                if (type === "TABLE") {
+                        schedules = jadwal;
+                } else {
+                        schedules = groupedByDay;
+                }
+
                 return {
                         status: true,
                         data: {
-                                entries: jadwal,
+                                entries: schedules,
                                 totalData,
                                 totalPage,
                         },

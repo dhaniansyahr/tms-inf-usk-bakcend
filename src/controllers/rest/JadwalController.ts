@@ -11,10 +11,6 @@ export async function create(c: Context): Promise<TypedResponse> {
         const serviceResponse = await JadwalService.create(data);
 
         if (!serviceResponse.status) {
-                // if (serviceResponse.err?.code === 409) {
-                //         return response_conflict(c, "Terjadi Konflik dengan jadwal lainnya!");
-                // }
-
                 return handleServiceErrorWithResponse(c, serviceResponse);
         }
 
@@ -23,8 +19,9 @@ export async function create(c: Context): Promise<TypedResponse> {
 
 export async function getAll(c: Context): Promise<TypedResponse> {
         const filters: FilteringQueryV2 = checkFilteringQueryV2(c);
+        const type = c.req.query("type") as string;
 
-        const serviceResponse = await JadwalService.getAll(filters);
+        const serviceResponse = await JadwalService.getAll(filters, type);
 
         if (!serviceResponse.status) {
                 return handleServiceErrorWithResponse(c, serviceResponse);

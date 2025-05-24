@@ -21,20 +21,23 @@ router.route("/jadwal", RoutesRegistry.JadwalRoutes);
 router.route("/user-levels", RoutesRegistry.UserLevelsRoutes);
 router.route("/acl", RoutesRegistry.AclRoutes);
 router.route("/pendaftaran-asisten-lab", RoutesRegistry.PendaftaranAsistenLabRoutes);
+
+router.route("/upload-file", RoutesRegistry.UploadRoutes);
+
 router.get("/", (c: Context) => {
-    return response_success(c, "main routes!");
+        return response_success(c, "main routes!");
 });
 
 router.get("/robots.txt", (c: Context) => {
-    return c.text(`User-agent: *\nAllow: /`);
+        return c.text(`User-agent: *\nAllow: /`);
 });
 
 router.get("/ping", (c: Context) => {
-    return response_success(c, "pong!");
+        return response_success(c, "pong!");
 });
 
 router.all("*", (c: Context) => {
-    return response_not_found(c);
+        return response_not_found(c);
 });
 
 export default router;

@@ -45,18 +45,98 @@ jobs:
                         - name: SSH to Server
                           uses: appleboy/ssh-action@master
                           with:
-                                  host: ${{ secrets.SSH_HOST }}
-                                  username: ${{ secrets.SSH_USERNAME }}
-                                  key: ${{ secrets.SSH_PRIVATE_KEY }}
-                                  port: ${{ secrets.PORT }}
-                                  script: |
-                                          export NVM_DIR="$HOME/.nvm"
-                                          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-                                          nvm use 18
-                                          cd tms-inf/backend
-                                          git add . && git stash && git fetch origin main && git pull
-                                          npm install
-                                          npx prisma migrate deploy
-                                          npx prisma generate
-                                          npm run seed
-                                          pm2 restart tms-inf-backend
+                                host: ${{ secrets.SSH_HOST }}
+                                username: ${{ secrets.SSH_USERNAME }}
+                                key: ${{ secrets.SSH_PRIVATE_KEY }}
+                                port: ${{ secrets.PORT }}
+                                script: |
+                                cd tms-inf/backend
+
+                        - name: Fetch Code and Reset Directory
+                          uses: appleboy/ssh-action@master
+                          with:
+                                host: ${{ secrets.SSH_HOST }}
+                                username: ${{ secrets.SSH_USERNAME }}
+                                key: ${{ secrets.SSH_PRIVATE_KEY }}
+                                port: ${{ secrets.PORT }}
+                                script: |
+                                cd tms-inf/backend
+                                git add . && git stash && git fetch origin main && git pull
+                        continue-on-error: false
+
+                        - name: Install dependencies
+                          uses: appleboy/ssh-action@master
+                          with:
+                                host: ${{ secrets.SSH_HOST }}
+                                username: ${{ secrets.SSH_USERNAME }}
+                                key: ${{ secrets.SSH_PRIVATE_KEY }}
+                                port: ${{ secrets.PORT }}
+                                script: |
+                                export NVM_DIR="$HOME/.nvm"
+                                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+                                nvm use 18
+                                cd tms-inf/backend
+                                npm install
+                        continue-on-error: false
+
+                        - name: Deploy Migration to Database
+                          uses: appleboy/ssh-action@master
+                          with:
+                                host: ${{ secrets.SSH_HOST }}
+                                username: ${{ secrets.SSH_USERNAME }}
+                                key: ${{ secrets.SSH_PRIVATE_KEY }}
+                                port: ${{ secrets.PORT }}
+                                script: |
+                                cd tms-inf/backend
+                                export NVM_DIR="$HOME/.nvm"
+                                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+                                nvm use 18
+                                npx prisma migrate deploy
+                        continue-on-error: false
+
+                        - name: Re-Generate Prisma Schema
+                          uses: appleboy/ssh-action@master
+                          with:
+                                host: ${{ secrets.SSH_HOST }}
+                                username: ${{ secrets.SSH_USERNAME }}
+                                key: ${{ secrets.SSH_PRIVATE_KEY }}
+                                port: ${{ secrets.PORT }}
+                                script: |
+                                cd tms-inf/backend
+                                export NVM_DIR="$HOME/.nvm"
+                                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+                                nvm use 18
+                                npx prisma generate
+                        continue-on-error: false
+
+                        - name: Re-Seed Database
+                          uses: appleboy/ssh-action@master
+                          with:
+                                host: ${{ secrets.SSH_HOST }}
+                                username: ${{ secrets.SSH_USERNAME }}
+                                key: ${{ secrets.SSH_PRIVATE_KEY }}
+                                port: ${{ secrets.PORT }}
+                                script: |
+                                cd tms-inf/backend
+                                export NVM_DIR="$HOME/.nvm"
+                                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+                                nvm use 18
+                                npm run seed
+                        continue-on-error: false
+
+                        - name: Restart PM2 Process
+                          uses: appleboy/ssh-action@master
+                          with:
+                                host: ${{ secrets.SSH_HOST }}
+                                username: ${{ secrets.SSH_USERNAME }}
+                                key: ${{ secrets.SSH_PRIVATE_KEY }}
+                                port: ${{ secrets.PORT }}
+                                script: |
+                                cd tms-inf/backend
+                                export NVM_DIR="$HOME/.nvm"
+                                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+                                nvm use 18
+                                pm2 restart tms-inf-backend
+                        continue-on-error: false
+
+

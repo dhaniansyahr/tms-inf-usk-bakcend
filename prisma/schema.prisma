@@ -32,6 +32,14 @@ enum NILAI_MATAKULIAH {
   E
 }
 
+enum BIDANG_MINAT {
+  RPL
+  DATA_MINING
+  JARINGAN
+  GIS
+  UMUM
+}
+
 model User {
   id          String   @id
   fullName    String
@@ -108,6 +116,8 @@ model Matakuliah {
   kode                  String                  @unique
   type                  TYPE_MATKUL
   sks                   Int
+  bidangMinat           BIDANG_MINAT
+  semester              Int
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
   dosenPengampuMK       DosenPengampuMK[]
@@ -116,14 +126,15 @@ model Matakuliah {
 }
 
 model Dosen {
-  id          String   @id
+  id          String       @id
   nama        String
-  email       String
+  email       String       @unique
   password    String
-  nip         String   @unique
+  nip         String       @unique
+  bidangMinat BIDANG_MINAT
   userLevelId String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   userLevel UserLevels @relation(fields: [userLevelId], references: [id])
 
@@ -152,7 +163,7 @@ model AsistenLab {
 model PendaftaranAsistenLab {
   id             String             @id
   mahasiswaId    String
-  matakuliahId   String
+  jadwalId       String
   nilaiTeori     NILAI_MATAKULIAH
   nilaiPraktikum NILAI_MATAKULIAH
   nilaiAkhir     NILAI_MATAKULIAH
@@ -161,8 +172,10 @@ model PendaftaranAsistenLab {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
-  mahasiswa  Mahasiswa  @relation(fields: [mahasiswaId], references: [id])
-  matakuliah Matakuliah @relation(fields: [matakuliahId], references: [id])
+  mahasiswa    Mahasiswa   @relation(fields: [mahasiswaId], references: [id])
+  jadwal       Jadwal      @relation(fields: [jadwalId], references: [id])
+  Matakuliah   Matakuliah? @relation(fields: [matakuliahId], references: [id])
+  matakuliahId String?
 }
 
 model Mahasiswa {
@@ -197,12 +210,9 @@ model Jadwal {
   hari         String
   shiftId      String
   ruanganId    String
-  dosenId      String
   semester     SEMESTER
   tahun        String
   isOverride   Boolean?
-  asistenLabId String?
-  mahasiswaId  String?
   matakuliahId String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -210,13 +220,14 @@ model Jadwal {
 
   shift      Shift               @relation(fields: [shiftId], references: [id])
   ruangan    RuanganLaboratorium @relation(fields: [ruanganId], references: [id])
-  dosen      Dosen               @relation(fields: [dosenId], references: [id])
-  asisten    AsistenLab?         @relation(fields: [asistenLabId], references: [id])
-  mahasiswa  Mahasiswa?          @relation(fields: [mahasiswaId], references: [id])
   matakuliah Matakuliah          @relation(fields: [matakuliahId], references: [id])
 
-  Absensi Absensi?
-  Meeting Meeting[]
+  dosen                 Dosen[]
+  asisten               AsistenLab[]
+  mahasiswa             Mahasiswa[]
+  Absensi               Absensi[]
+  Meeting               Meeting[]
+  PendaftaranAsistenLab PendaftaranAsistenLab[]
 }
 
 model Meeting {
@@ -227,7 +238,8 @@ model Meeting {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  jadwal Jadwal? @relation(fields: [jadwalId], references: [id])
+  jadwal  Jadwal?   @relation(fields: [jadwalId], references: [id])
+  Absensi Absensi[]
 }
 
 model RuanganLaboratorium {
@@ -272,16 +284,23 @@ model Holidays {
 
 model Absensi {
   id          String    @id
-  mahasiswaId String
-  jadwalId    String    @unique
+  mahasiswaId String?
+  jadwalId    String
+  meetingId   String?
+  dosenId     String?
+  isPresent   Boolean   @default(false)
+  keterangan  String?
+  waktuAbsen  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  mahasiswa Mahasiswa @relation(fields: [mahasiswaId], references: [id])
-  jadwal    Jadwal    @relation(fields: [jadwalId], references: [id])
-  Dosen     Dosen?    @relation(fields: [dosenId], references: [id])
-  dosenId   String?
+  mahasiswa Mahasiswa? @relation(fields: [mahasiswaId], references: [id])
+  jadwal    Jadwal     @relation(fields: [jadwalId], references: [id])
+  meeting   Meeting?   @relation(fields: [meetingId], references: [id])
+  dosen     Dosen?     @relation(fields: [dosenId], references: [id])
+
+  @@unique([mahasiswaId, meetingId])
 }
 
 model Shift {

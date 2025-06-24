@@ -52,6 +52,16 @@ export async function getSummary(c: Context): Promise<TypedResponse> {
         return response_success(c, serviceResponse.data, "Successfully fetched all Summary Jadwal!");
 }
 
+export async function diagnoseScheduling(c: Context): Promise<TypedResponse> {
+        const serviceResponse = await JadwalService.diagnoseScheduling();
+
+        if (!serviceResponse.status) {
+                return handleServiceErrorWithResponse(c, serviceResponse);
+        }
+
+        return response_success(c, serviceResponse.data, "Successfully fetched all Diagnose Jadwal!");
+}
+
 export async function update(c: Context): Promise<TypedResponse> {
         const data: JadwalDTO = await c.req.json();
         const id = c.req.param("id");
@@ -97,4 +107,16 @@ export async function checkFreeSchedule(c: Context): Promise<TypedResponse> {
         }
 
         return response_success(c, serviceResponse.data, "Successfully fetched Jadwal by id!");
+}
+
+export async function generateAllAvailableSchedules(c: Context): Promise<TypedResponse> {
+        const preferredDay = c.req.query("day") as string;
+
+        const serviceResponse = await JadwalService.generateAllAvailableSchedules(preferredDay);
+
+        if (!serviceResponse.status) {
+                return handleServiceErrorWithResponse(c, serviceResponse);
+        }
+
+        return response_success(c, serviceResponse.data, "Successfully generated schedules for all available matakuliah!");
 }

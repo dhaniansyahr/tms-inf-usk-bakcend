@@ -6,6 +6,7 @@ import UserLevelsRoutes from "./UserLevels";
 import AclRoutes from "./Acl";
 import PendaftaranAsistenLabRoutes from "./PendaftaranAsistenLab";
 import UploadRoutes from "./UploadFile";
+import AbsensiRoutes from "./Absensi";
 
 const RoutesRegistry = {
         UserRoutes,
@@ -16,6 +17,7 @@ const RoutesRegistry = {
         AclRoutes,
         PendaftaranAsistenLabRoutes,
         UploadRoutes,
+        AbsensiRoutes,
 };
 
 export default RoutesRegistry;

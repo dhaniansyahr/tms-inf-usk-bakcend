@@ -24,6 +24,8 @@ router.route("/pendaftaran-asisten-lab", RoutesRegistry.PendaftaranAsistenLabRou
 
 router.route("/upload-file", RoutesRegistry.UploadRoutes);
 
+router.route("/absensi", RoutesRegistry.AbsensiRoutes);
+
 router.get("/", (c: Context) => {
         return response_success(c, "main routes!");
 });

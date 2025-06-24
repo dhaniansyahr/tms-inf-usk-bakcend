@@ -28,3 +28,43 @@ export function getCurrentAcademicYear(): string {
                 return `${year - 1}/${year}`;
         }
 }
+
+export function isValidNPM(npm: string): boolean {
+        const npmRegex = /^\d{13}$/;
+        return npmRegex.test(npm);
+}
+
+export function isValidNIP(nip: string): boolean {
+        const nipRegex = /^\d{16}$/;
+        return nipRegex.test(nip);
+}
+
+export function isValidEmail(email: string): boolean {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+}
+
+export function checkDigitNPMDepartment(npm: string): { isFMIPA: boolean; isInformatika: boolean } {
+        const npmRegex = /^\d{13}$/;
+        if (!npmRegex.test(npm)) return { isFMIPA: false, isInformatika: false };
+
+        const digit3And4 = npm.substring(2, 4);
+        return {
+                isFMIPA: digit3And4 === "08",
+                isInformatika: digit3And4 === "07",
+        };
+}
+
+export function checkUskEmail(email: string): boolean {
+        if (!isValidEmail(email)) return false;
+
+        const validDomains = ["@mhs.usk.ac.id", "@usk.ac.id"];
+        return validDomains.some((domain) => email.toLowerCase().endsWith(domain));
+}
+
+export function getIdentityType(identity: string): string {
+        if (isValidEmail(identity)) return "EMAIL";
+        if (isValidNPM(identity)) return "NPM";
+        if (isValidNIP(identity)) return "NIP";
+        return "INVALID";
+}

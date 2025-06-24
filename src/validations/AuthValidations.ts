@@ -3,6 +3,7 @@ import { Context, Next } from "hono";
 import { response_bad_request } from "../utils/response.utils";
 import { prisma } from "../utils/prisma.utils";
 import { checkDigitNPMDepartment, checkUskEmail, getIdentityType, isValidEmail, isValidNIP, isValidNPM } from "$utils/strings.utils";
+import { generateErrorStructure } from "./helper";
 
 function validateEmailFormat(email: string): boolean {
         const expression: RegExp = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
@@ -38,47 +39,51 @@ export async function validateLoginDTO(c: Context, next: Next) {
         const data: UserLoginDTO = await c.req.json();
 
         const invalidFields = [];
-        if (!data.identity) invalidFields.push("Email Or NPM Or NIP is required");
-        if (!data.password) invalidFields.push("password is required");
+        if (!data.identity) invalidFields.push(generateErrorStructure("identity", "Email Or NPM Or NIP is required"));
+        if (!data.password) invalidFields.push(generateErrorStructure("password", "password is required"));
 
         const identityType = getIdentityType(data.identity);
 
         if (identityType === "INVALID") {
-                invalidFields.push("Pastikan identitas yang anda masukkan benar. Identitas harus berupa email atau 13 digit NPM atau 16 digit NIP.");
+                invalidFields.push(
+                        generateErrorStructure("identity", "Pastikan identitas yang anda masukkan benar. Identitas harus berupa email atau 13 digit NPM atau 16 digit NIP.")
+                );
         }
 
         if (identityType === "EMAIL") {
                 if (!isValidEmail(data.identity)) {
-                        invalidFields.push("Pastikan email anda benar.");
+                        invalidFields.push(generateErrorStructure("identity", "Pastikan email anda benar."));
                 }
 
                 if (!checkUskEmail(data.identity)) {
-                        invalidFields.push("Mohon gunakan email USK untuk login.");
+                        invalidFields.push(generateErrorStructure("identity", "Mohon gunakan email USK untuk login."));
                 }
         }
 
         if (identityType === "NPM") {
                 if (!isValidNPM(data.identity)) {
-                        invalidFields.push("Pastikan NPM anda benar. NPM harus 13 digit.");
+                        invalidFields.push(generateErrorStructure("identity", "Pastikan NPM anda benar. NPM harus 13 digit."));
                 }
 
                 if (!checkDigitNPMDepartment(data.identity).isFMIPA) {
-                        invalidFields.push("Mohon maaf hanya mahasiswa FMIPA yang dapat login.");
+                        invalidFields.push(generateErrorStructure("identity", "Mohon maaf hanya mahasiswa FMIPA yang dapat login."));
                 }
 
                 if (!checkDigitNPMDepartment(data.identity).isInformatika) {
-                        invalidFields.push("Mohon maaf hanya mahasiswa Informatika yang dapat login.");
+                        invalidFields.push(generateErrorStructure("identity", "Mohon maaf hanya mahasiswa Informatika yang dapat login."));
                 }
         }
 
         if (identityType === "NIP") {
                 if (!isValidNIP(data.identity)) {
-                        invalidFields.push("Pastikan NIP anda benar. NIP harus 16 digit.");
+                        invalidFields.push(generateErrorStructure("identity", "Pastikan NIP anda benar. NIP harus 16 digit."));
                 }
         }
 
         if (identityType === "INVALID") {
-                invalidFields.push("Pastikan identitas yang anda masukkan benar. Identitas harus berupa email atau 13 digit NPM atau 16 digit NIP.");
+                invalidFields.push(
+                        generateErrorStructure("identity", "Pastikan identitas yang anda masukkan benar. Identitas harus berupa email atau 13 digit NPM atau 16 digit NIP.")
+                );
         }
 
         if (invalidFields.length > 0) {

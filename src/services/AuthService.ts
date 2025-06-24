@@ -25,13 +25,9 @@ export async function logIn(data: UserLoginDTO): Promise<ServiceResponse<any>> {
                         return loginDosen(data);
                 } else if (checkIdentity === "EMAIL") {
                         return loginWithEmail(data);
-                } else {
-                        return {
-                                status: false,
-                                err: { message: "Invalid Identity, Expected NPM, NIP, or Email!", code: 404 },
-                                data: {},
-                        };
                 }
+
+                return BadRequestWithMessage("Pastikan identitas yang anda masukkan benar. Identitas harus berupa email atau 13 digit NPM atau 16 digit NIP.");
         } catch (err) {
                 Logger.error(`AuthService.login : ${err}`);
                 return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
@@ -55,14 +51,7 @@ export async function loginMahasiswa(data: UserLoginDTO): Promise<ServiceRespons
                         const refreshToken = createToken(mahasiswa, 60 * 60 * 24 * 3);
                         return { status: true, data: { user: exclude(mahasiswa, "password"), token, refreshToken } };
                 } else {
-                        return {
-                                status: false,
-                                err: {
-                                        message: "Invalid Password!",
-                                        code: 404,
-                                },
-                                data: {},
-                        };
+                        return BadRequestWithMessage("Password salah!");
                 }
         } catch (err) {
                 Logger.error(`AuthService.loginMahasiswa : ${err}`);
@@ -87,14 +76,7 @@ export async function loginDosen(data: UserLoginDTO): Promise<ServiceResponse<an
                         const refreshToken = createToken(dosen, 60 * 60 * 24 * 3);
                         return { status: true, data: { user: exclude(dosen, "password"), token, refreshToken } };
                 } else {
-                        return {
-                                status: false,
-                                err: {
-                                        message: "Invalid Password!",
-                                        code: 404,
-                                },
-                                data: {},
-                        };
+                        return BadRequestWithMessage("Password salah!");
                 }
         } catch (err) {
                 Logger.error(`AuthService.loginMahasiswa : ${err}`);
@@ -119,14 +101,7 @@ export async function loginWithEmail(data: UserLoginDTO): Promise<ServiceRespons
                         const refreshToken = createToken(user, 60 * 60 * 24 * 3);
                         return { status: true, data: { user: exclude(user, "password"), token, refreshToken } };
                 } else {
-                        return {
-                                status: false,
-                                err: {
-                                        message: "Invalid Password!",
-                                        code: 404,
-                                },
-                                data: {},
-                        };
+                        return BadRequestWithMessage("Password salah!");
                 }
         } catch (err) {
                 Logger.error(`AuthService.loginWithEmail : ${err}`);

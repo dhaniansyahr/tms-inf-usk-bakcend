@@ -307,7 +307,7 @@ model Shift {
   id        String   @id
   startTime String
   endTime   String
-  isActive  Boolean
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

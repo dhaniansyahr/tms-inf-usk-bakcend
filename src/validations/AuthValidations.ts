@@ -77,6 +77,10 @@ export async function validateLoginDTO(c: Context, next: Next) {
                 }
         }
 
+        if (identityType === "INVALID") {
+                invalidFields.push("Pastikan identitas yang anda masukkan benar. Identitas harus berupa email atau 13 digit NPM atau 16 digit NIP.");
+        }
+
         if (invalidFields.length > 0) {
                 return response_bad_request(c, "Bad Request", invalidFields);
         }

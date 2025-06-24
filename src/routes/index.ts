@@ -22,9 +22,10 @@ router.route("/user-levels", RoutesRegistry.UserLevelsRoutes);
 router.route("/acl", RoutesRegistry.AclRoutes);
 router.route("/pendaftaran-asisten-lab", RoutesRegistry.PendaftaranAsistenLabRoutes);
 
-router.route("/upload-file", RoutesRegistry.UploadRoutes);
+router.route("/files", RoutesRegistry.UploadRoutes);
 
 router.route("/absensi", RoutesRegistry.AbsensiRoutes);
+router.route("/dashboard", RoutesRegistry.DashboardRoutes);
 
 router.get("/", (c: Context) => {
         return response_success(c, "main routes!");

@@ -62,11 +62,11 @@ export async function validateLoginDTO(c: Context, next: Next) {
                         invalidFields.push("Pastikan NPM anda benar. NPM harus 13 digit.");
                 }
 
-                if (checkDigitNPMDepartment(data.identity).isFMIPA) {
+                if (!checkDigitNPMDepartment(data.identity).isFMIPA) {
                         invalidFields.push("Mohon maaf hanya mahasiswa FMIPA yang dapat login.");
                 }
 
-                if (checkDigitNPMDepartment(data.identity).isInformatika) {
+                if (!checkDigitNPMDepartment(data.identity).isInformatika) {
                         invalidFields.push("Mohon maaf hanya mahasiswa Informatika yang dapat login.");
                 }
         }

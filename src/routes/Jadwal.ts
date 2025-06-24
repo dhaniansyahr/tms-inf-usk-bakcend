@@ -6,15 +6,11 @@ const JadwalRoutes = new Hono();
 
 JadwalRoutes.get("/", AuthMiddleware.checkJwt, JadwalController.getAll);
 
-JadwalRoutes.get("/summary", AuthMiddleware.checkJwt, JadwalController.getSummary);
-
 JadwalRoutes.get("/diagnose", AuthMiddleware.checkJwt, JadwalController.diagnoseScheduling);
 
 JadwalRoutes.get("/:id", AuthMiddleware.checkJwt, JadwalController.getById);
 
 JadwalRoutes.post("/", AuthMiddleware.checkJwt, JadwalController.create);
-
-JadwalRoutes.post("/generate", AuthMiddleware.checkJwt, JadwalController.generateSchedule);
 
 JadwalRoutes.post("/generate-all", AuthMiddleware.checkJwt, JadwalController.generateAllAvailableSchedules);
 

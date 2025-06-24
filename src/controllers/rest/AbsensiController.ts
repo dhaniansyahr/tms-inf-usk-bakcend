@@ -81,6 +81,38 @@ export async function getByMeetingId(c: Context): Promise<TypedResponse> {
         return response_success(c, serviceResponse.data, "Successfully fetched Absensi for meeting!");
 }
 
+export async function getAbsensiByMeeting(c: Context): Promise<TypedResponse> {
+        const meetingId = c.req.param("meetingId");
+
+        const serviceResponse = await AbsensiService.getAbsensiByMeeting(meetingId);
+
+        if (!serviceResponse.status) {
+                return handleServiceErrorWithResponse(c, serviceResponse);
+        }
+
+        return response_success(c, serviceResponse.data, "Successfully fetched comprehensive attendance data for meeting!");
+}
+
+export async function getAllMeetingsWithAbsensi(c: Context): Promise<TypedResponse> {
+        const jadwalId = c.req.query("jadwalId");
+        const semester = c.req.query("semester");
+        const tahun = c.req.query("tahun");
+
+        const filters = {
+                ...(jadwalId && { jadwalId }),
+                ...(semester && { semester }),
+                ...(tahun && { tahun }),
+        };
+
+        const serviceResponse = await AbsensiService.getAllMeetingsWithAbsensi(Object.keys(filters).length > 0 ? filters : undefined);
+
+        if (!serviceResponse.status) {
+                return handleServiceErrorWithResponse(c, serviceResponse);
+        }
+
+        return response_success(c, serviceResponse.data, "Successfully fetched all meetings with attendance data!");
+}
+
 export async function createBulkAbsensiForMeeting(c: Context): Promise<TypedResponse> {
         const data: AbsensiPerMeetingDTO = await c.req.json();
 
@@ -105,6 +137,18 @@ export async function getByJadwalId(c: Context): Promise<TypedResponse> {
         return response_success(c, serviceResponse.data, "Successfully fetched Absensi for jadwal!");
 }
 
+export async function getAllMeetingsAbsensiByJadwal(c: Context): Promise<TypedResponse> {
+        const jadwalId = c.req.param("jadwalId");
+
+        const serviceResponse = await AbsensiService.getAllMeetingsAbsensiByJadwal(jadwalId);
+
+        if (!serviceResponse.status) {
+                return handleServiceErrorWithResponse(c, serviceResponse);
+        }
+
+        return response_success(c, serviceResponse.data, "Successfully fetched all meetings and attendance data for jadwal!");
+}
+
 export async function getAbsensiSummary(c: Context): Promise<TypedResponse> {
         const jadwalId = c.req.param("jadwalId");
 
@@ -115,4 +159,17 @@ export async function getAbsensiSummary(c: Context): Promise<TypedResponse> {
         }
 
         return response_success(c, serviceResponse.data, "Successfully fetched attendance summary!");
+}
+
+export async function getAbsensiByJadwalIdAndMahasiswaId(c: Context): Promise<TypedResponse> {
+        const jadwalId = c.req.param("jadwalId");
+        const userId = c.req.param("userId");
+
+        const serviceResponse = await AbsensiService.getAbsensiByJadwalIdAndMahasiswaId(jadwalId, userId);
+
+        if (!serviceResponse.status) {
+                return handleServiceErrorWithResponse(c, serviceResponse);
+        }
+
+        return response_success(c, serviceResponse.data, "Successfully fetched attendance data!");
 }

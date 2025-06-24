@@ -49,9 +49,11 @@ export function checkDigitNPMDepartment(npm: string): { isFMIPA: boolean; isInfo
         if (!npmRegex.test(npm)) return { isFMIPA: false, isInformatika: false };
 
         const digit3And4 = npm.substring(2, 4);
+        const digit6And7 = npm.substring(5, 7);
+
         return {
                 isFMIPA: digit3And4 === "08",
-                isInformatika: digit3And4 === "07",
+                isInformatika: digit6And7 === "07",
         };
 }
 

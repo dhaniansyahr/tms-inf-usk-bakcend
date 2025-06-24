@@ -6,4 +6,6 @@ const UploadRoutes = new Hono();
 
 UploadRoutes.post("/", AuthMiddleware.checkJwt, UploadController.create);
 
+UploadRoutes.get("/*", UploadController.getFile);
+
 export default UploadRoutes;

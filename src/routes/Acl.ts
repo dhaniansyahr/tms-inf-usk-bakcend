@@ -11,4 +11,10 @@ AclRoutes.get("/:userLevelId", AuthMiddleware.checkJwt, AclController.getByUserL
 
 AclRoutes.post("/", AuthMiddleware.checkJwt, AclValidation.validateAclCreate, AclController.create);
 
+AclRoutes.put("/", AuthMiddleware.checkJwt, AclValidation.validateAclCreate, AclController.update);
+
+AclRoutes.post("/:userLevelId/add-permissions", AuthMiddleware.checkJwt, AclController.addPermissions);
+
+AclRoutes.delete("/:userLevelId/remove-permissions", AuthMiddleware.checkJwt, AclController.removePermissions);
+
 export default AclRoutes;

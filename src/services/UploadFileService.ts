@@ -11,6 +11,18 @@ export async function create(data: UploadDTO, baseUrl: string): Promise<ServiceR
                 const directory = data.directory as string;
                 const file = data.file as File;
 
+                // Check file size (2MB limit)
+                const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB in bytes
+                if (file.size > MAX_FILE_SIZE) {
+                        return {
+                                status: false,
+                                err: {
+                                        message: "File size must be less than 2MB",
+                                        code: 400,
+                                },
+                        };
+                }
+
                 // Sanitize directory name (remove dangerous characters)
                 const sanitizedDirectory = directory.replace(/[^a-zA-Z0-9_-]/g, "_");
 

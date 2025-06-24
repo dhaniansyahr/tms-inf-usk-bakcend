@@ -7,6 +7,7 @@ import { JadwalDTO } from "$entities/Jadwal";
 import { buildFilterQueryLimitOffsetV2 } from "./helpers/FilterQueryV2";
 import { HARI, HARI_LIST, jadwalGeneticService } from "./JadwalGeneticService";
 import { getCurrentAcademicYear, isGanjilSemester } from "$utils/strings.utils";
+import { UserJWTDAO } from "$entities/User";
 
 export type CreateResponse = Jadwal | {};
 export async function create(data: JadwalDTO): Promise<ServiceResponse<CreateResponse>> {
@@ -81,7 +82,7 @@ export async function create(data: JadwalDTO): Promise<ServiceResponse<CreateRes
 }
 
 export type GetAllResponse = PagedList<Jadwal[]> | {};
-export async function getAll(filters: FilteringQueryV2, type: string): Promise<ServiceResponse<GetAllResponse>> {
+export async function getAll(filters: FilteringQueryV2, type: string, user: UserJWTDAO): Promise<ServiceResponse<GetAllResponse>> {
         try {
                 const usedFilters = buildFilterQueryLimitOffsetV2(filters);
 
@@ -112,6 +113,19 @@ export async function getAll(filters: FilteringQueryV2, type: string): Promise<S
                                 },
                         },
                 };
+
+                // if not Operator, filter jadwal where they are assigned to them
+                if (type !== "OPERATOR") {
+                        usedFilters.where.dosen = {
+                                id: { in: user.id },
+                        };
+                        usedFilters.where.asisten = {
+                                id: { in: user.id },
+                        };
+                        usedFilters.where.mahasiswa = {
+                                id: { in: user.id },
+                        };
+                }
 
                 let schedules: any[];
 
@@ -269,114 +283,6 @@ export async function deleteByIds(ids: string): Promise<ServiceResponse<{}>> {
 }
 
 /**
- * Generate schedules using enhanced genetic algorithm with comprehensive rule validation
- * @param preferredDay - Optional preferred day for scheduling
- * @param maxSchedules - Maximum number of schedules to generate (default: 20)
- * @returns Promise<ServiceResponse<any>> Response containing the saved schedules with validation info
- */
-export async function generateScheduleWithGenetic(preferredDay?: string, maxSchedules: number = 115): Promise<ServiceResponse<any>> {
-        try {
-                // Convert string day to HARI type if provided
-                const dayFilter = preferredDay ? (preferredDay.toUpperCase() as any) : undefined;
-
-                // Generate optimized schedules using enhanced genetic algorithm
-                const schedules = await jadwalGeneticService.generateOptimizedSchedule(dayFilter, maxSchedules);
-
-                // If no valid schedules could be generated, return early
-                if (schedules.length === 0) {
-                        return BadRequestWithMessage(
-                                "No new schedules could be generated. All matakuliah already have schedules, no valid lecturer-course combinations, or no valid slots are available."
-                        );
-                }
-
-                // Validate the generated schedule set for rule compliance
-                const validation = await jadwalGeneticService.validateScheduleSet(schedules);
-
-                if (!validation.isValid) {
-                        Logger.warn(`Generated schedules have rule violations: ${validation.violations.join(", ")}`);
-                }
-
-                // Save each schedule and generate meetings
-                const savedResults = await Promise.all(
-                        schedules.map(async (schedule) => {
-                                try {
-                                        // Use the enhanced saveSchedule function to save jadwal and create meetings
-                                        return await jadwalGeneticService.saveSchedule(schedule);
-                                } catch (saveError) {
-                                        Logger.error(`Error saving schedule ${schedule.id}: ${saveError}`);
-                                        return null;
-                                }
-                        })
-                );
-
-                // Filter out failed saves and extract jadwal records
-                const successfulSaves = savedResults.filter((result) => result !== null);
-                const savedSchedules = successfulSaves.map((result) => result.jadwal);
-
-                // Prepare response with additional metadata
-                const response = {
-                        schedules: savedSchedules,
-                        totalGenerated: schedules.length,
-                        totalSaved: savedSchedules.length,
-                        fitnessScores: schedules.map((s) => ({ id: s.id, fitness: s.fitness })),
-                        validation: {
-                                isValid: validation.isValid,
-                                violationCount: validation.violations.length,
-                                violations: validation.violations,
-                        },
-                        preferredDay: dayFilter,
-                        generationStats: {
-                                averageFitness: schedules.reduce((sum, s) => sum + s.fitness, 0) / schedules.length,
-                                bestFitness: Math.max(...schedules.map((s) => s.fitness)),
-                                worstFitness: Math.min(...schedules.map((s) => s.fitness)),
-                        },
-                };
-
-                return {
-                        status: true,
-                        data: response,
-                };
-        } catch (err) {
-                Logger.error(`JadwalService.generateScheduleWithGenetic : ${err}`);
-                return {
-                        status: false,
-                        err: { message: (err as Error).message, code: 500 },
-                        data: [],
-                };
-        }
-}
-
-export async function getScheduleSummary(): Promise<ServiceResponse<any>> {
-        try {
-                const existingSchedules = await jadwalGeneticService.getExistingSchedules();
-
-                // Count schedules by day
-                const countByDay = existingSchedules.reduce((acc: Record<string, number>, schedule) => {
-                        const day = schedule.hari;
-                        acc[day] = (acc[day] || 0) + 1;
-                        return acc;
-                }, {});
-
-                return {
-                        status: true,
-                        data: {
-                                totalSchedules: existingSchedules.length,
-                                countByDay,
-                                semester: isGanjilSemester() ? SEMESTER.GANJIL : SEMESTER.GENAP,
-                                academicYear: getCurrentAcademicYear(),
-                        },
-                };
-        } catch (err) {
-                Logger.error(`JadwalService.getScheduleSummary : ${err}`);
-                return {
-                        status: false,
-                        err: { message: (err as Error).message, code: 500 },
-                        data: null,
-                };
-        }
-}
-
-/**
  * Checks for free schedule slots based on day, semester, and year
  *
  * @param day Optional day of week to check (SENIN, SELASA, etc.)
@@ -484,7 +390,7 @@ export async function validateExistingSchedules(): Promise<ServiceResponse<any>>
         }
 }
 
-export async function checkFreeSchedule(day?: string): Promise<ServiceResponse<any>> {
+export async function getAvailableSchedule(day?: string): Promise<ServiceResponse<any>> {
         try {
                 // Get all active shifts
                 const allShifts = await prisma.shift.findMany({
@@ -653,7 +559,7 @@ export async function checkFreeSchedule(day?: string): Promise<ServiceResponse<a
                         },
                 };
         } catch (err) {
-                Logger.error(`JadwalService.checkFreeSchedule : ${err}`);
+                Logger.error(`JadwalService.getAvailableSchedule : ${err}`);
                 return {
                         status: false,
                         err: { message: (err as Error).message, code: 500 },

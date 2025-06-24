@@ -21,28 +21,34 @@ type PendaftaranAsistenLabWithRelations = PendaftaranAsistenLab & {
                 tahunMasuk: string;
                 isActive: boolean;
         };
-        matakuliah: {
+        jadwal: {
                 id: string;
-                nama: string;
-                kode: string;
-                type: string;
-                sks: number;
-                bidangMinat: string;
-                semester: number;
+                hari: string;
+                semester: string;
+                tahun: string;
+                matakuliah: {
+                        id: string;
+                        nama: string;
+                        kode: string;
+                        type: string;
+                        sks: number;
+                        bidangMinat: string;
+                        semester: number;
+                };
         };
 };
 
 export type CreateResponse = PendaftaranAsistenLab | {};
 export async function create(data: PendaftaranAsistenLabDTO): Promise<ServiceResponse<CreateResponse>> {
         try {
-                // Validate that mahasiswa and matakuliah exist
-                const [mahasiswaExists, matakuliahExists] = await Promise.all([
+                // Validate that mahasiswa and jadwal exist
+                const [mahasiswaExists, jadwalExists] = await Promise.all([
                         prisma.mahasiswa.findUnique({
                                 where: { id: data.mahasiswaId },
                                 select: { id: true },
                         }),
-                        prisma.matakuliah.findUnique({
-                                where: { id: data.matakuliahId },
+                        prisma.jadwal.findUnique({
+                                where: { id: data.jadwalId },
                                 select: { id: true },
                         }),
                 ]);
@@ -52,18 +58,18 @@ export async function create(data: PendaftaranAsistenLabDTO): Promise<ServiceRes
                                 status: false,
                                 data: {},
                                 err: {
-                                        message: "Mahasiswa not found",
+                                        message: "Mahasiswa tidak ditemukan",
                                         code: 404,
                                 },
                         };
                 }
 
-                if (!matakuliahExists) {
+                if (!jadwalExists) {
                         return {
                                 status: false,
                                 data: {},
                                 err: {
-                                        message: "Matakuliah not found",
+                                        message: "Jadwal tidak ditemukan",
                                         code: 404,
                                 },
                         };
@@ -73,7 +79,7 @@ export async function create(data: PendaftaranAsistenLabDTO): Promise<ServiceRes
                 const existingRegistration = await prisma.pendaftaranAsistenLab.findFirst({
                         where: {
                                 mahasiswaId: data.mahasiswaId,
-                                matakuliahId: data.matakuliahId,
+                                jadwalId: data.jadwalId,
                         },
                 });
 
@@ -82,7 +88,7 @@ export async function create(data: PendaftaranAsistenLabDTO): Promise<ServiceRes
                                 status: false,
                                 data: {},
                                 err: {
-                                        message: "Registration already exists for this mahasiswa and matakuliah",
+                                        message: "Pendaftaran sudah ada untuk mahasiswa dan jadwal ini",
                                         code: 409,
                                 },
                         };
@@ -101,15 +107,23 @@ export async function create(data: PendaftaranAsistenLabDTO): Promise<ServiceRes
                                                 isActive: true,
                                         },
                                 },
-                                matakuliah: {
+                                jadwal: {
                                         select: {
                                                 id: true,
-                                                nama: true,
-                                                kode: true,
-                                                type: true,
-                                                sks: true,
-                                                bidangMinat: true,
+                                                hari: true,
                                                 semester: true,
+                                                tahun: true,
+                                                matakuliah: {
+                                                        select: {
+                                                                id: true,
+                                                                nama: true,
+                                                                kode: true,
+                                                                type: true,
+                                                                sks: true,
+                                                                bidangMinat: true,
+                                                                semester: true,
+                                                        },
+                                                },
                                         },
                                 },
                         },
@@ -142,15 +156,23 @@ export async function getAll(filters: FilteringQueryV2): Promise<ServiceResponse
                                         isActive: true,
                                 },
                         },
-                        matakuliah: {
+                        jadwal: {
                                 select: {
                                         id: true,
-                                        nama: true,
-                                        kode: true,
-                                        type: true,
-                                        sks: true,
-                                        bidangMinat: true,
+                                        hari: true,
                                         semester: true,
+                                        tahun: true,
+                                        matakuliah: {
+                                                select: {
+                                                        id: true,
+                                                        nama: true,
+                                                        kode: true,
+                                                        type: true,
+                                                        sks: true,
+                                                        bidangMinat: true,
+                                                        semester: true,
+                                                },
+                                        },
                                 },
                         },
                 };
@@ -200,15 +222,23 @@ export async function getById(id: string): Promise<ServiceResponse<GetByIdRespon
                                                 isActive: true,
                                         },
                                 },
-                                matakuliah: {
+                                jadwal: {
                                         select: {
                                                 id: true,
-                                                nama: true,
-                                                kode: true,
-                                                type: true,
-                                                sks: true,
-                                                bidangMinat: true,
+                                                hari: true,
                                                 semester: true,
+                                                tahun: true,
+                                                matakuliah: {
+                                                        select: {
+                                                                id: true,
+                                                                nama: true,
+                                                                kode: true,
+                                                                type: true,
+                                                                sks: true,
+                                                                bidangMinat: true,
+                                                                semester: true,
+                                                        },
+                                                },
                                         },
                                 },
                         },
@@ -237,8 +267,8 @@ export async function update(id: string, data: PendaftaranAsistenLabDTO): Promis
 
                 if (!existingRecord) return INVALID_ID_SERVICE_RESPONSE;
 
-                // Validate mahasiswa and matakuliah if they are being updated
-                if (data.mahasiswaId || data.matakuliahId) {
+                // Validate mahasiswa and jadwal if they are being updated
+                if (data.mahasiswaId || data.jadwalId) {
                         const validationPromises = [];
 
                         if (data.mahasiswaId) {
@@ -250,10 +280,10 @@ export async function update(id: string, data: PendaftaranAsistenLabDTO): Promis
                                 );
                         }
 
-                        if (data.matakuliahId) {
+                        if (data.jadwalId) {
                                 validationPromises.push(
-                                        prisma.matakuliah.findUnique({
-                                                where: { id: data.matakuliahId },
+                                        prisma.jadwal.findUnique({
+                                                where: { id: data.jadwalId },
                                                 select: { id: true },
                                         })
                                 );
@@ -266,18 +296,18 @@ export async function update(id: string, data: PendaftaranAsistenLabDTO): Promis
                                         status: false,
                                         data: {},
                                         err: {
-                                                message: "Mahasiswa not found",
+                                                message: "Mahasiswa tidak ditemukan",
                                                 code: 404,
                                         },
                                 };
                         }
 
-                        if (data.matakuliahId && !validationResults[data.mahasiswaId ? 1 : 0]) {
+                        if (data.jadwalId && !validationResults[data.mahasiswaId ? 1 : 0]) {
                                 return {
                                         status: false,
                                         data: {},
                                         err: {
-                                                message: "Matakuliah not found",
+                                                message: "Jadwal tidak ditemukan",
                                                 code: 404,
                                         },
                                 };
@@ -298,15 +328,23 @@ export async function update(id: string, data: PendaftaranAsistenLabDTO): Promis
                                                 isActive: true,
                                         },
                                 },
-                                matakuliah: {
+                                jadwal: {
                                         select: {
                                                 id: true,
-                                                nama: true,
-                                                kode: true,
-                                                type: true,
-                                                sks: true,
-                                                bidangMinat: true,
+                                                hari: true,
                                                 semester: true,
+                                                tahun: true,
+                                                matakuliah: {
+                                                        select: {
+                                                                id: true,
+                                                                nama: true,
+                                                                kode: true,
+                                                                type: true,
+                                                                sks: true,
+                                                                bidangMinat: true,
+                                                                semester: true,
+                                                        },
+                                                },
                                         },
                                 },
                         },
@@ -344,7 +382,7 @@ export async function deleteByIds(ids: string): Promise<ServiceResponse<{}>> {
                                 status: false,
                                 data: {},
                                 err: {
-                                        message: `Records not found for IDs: ${nonExistentIds.join(", ")}`,
+                                        message: `Data tidak ditemukan untuk ID: ${nonExistentIds.join(", ")}`,
                                         code: 404,
                                 },
                         };
@@ -388,7 +426,7 @@ export async function penerimaanAsistenLab(id: string, data: PenerimaanAsistenLa
                                 status: false,
                                 data: {},
                                 err: {
-                                        message: "Cannot change status of already approved registration",
+                                        message: "Tidak dapat mengubah status pendaftaran yang sudah disetujui",
                                         code: 400,
                                 },
                         };
@@ -403,7 +441,7 @@ export async function penerimaanAsistenLab(id: string, data: PenerimaanAsistenLa
                                         status: false,
                                         data: {},
                                         err: {
-                                                message: "Keterangan is required when rejecting registration",
+                                                message: "Keterangan diperlukan saat menolak pendaftaran",
                                                 code: 400,
                                         },
                                 };
@@ -428,15 +466,23 @@ export async function penerimaanAsistenLab(id: string, data: PenerimaanAsistenLa
                                                 isActive: true,
                                         },
                                 },
-                                matakuliah: {
+                                jadwal: {
                                         select: {
                                                 id: true,
-                                                nama: true,
-                                                kode: true,
-                                                type: true,
-                                                sks: true,
-                                                bidangMinat: true,
+                                                hari: true,
                                                 semester: true,
+                                                tahun: true,
+                                                matakuliah: {
+                                                        select: {
+                                                                id: true,
+                                                                nama: true,
+                                                                kode: true,
+                                                                type: true,
+                                                                sks: true,
+                                                                bidangMinat: true,
+                                                                semester: true,
+                                                        },
+                                                },
                                         },
                                 },
                         },
@@ -476,15 +522,23 @@ export async function getByMahasiswaId(mahasiswaId: string, filters: FilteringQu
                                         isActive: true,
                                 },
                         },
-                        matakuliah: {
+                        jadwal: {
                                 select: {
                                         id: true,
-                                        nama: true,
-                                        kode: true,
-                                        type: true,
-                                        sks: true,
-                                        bidangMinat: true,
+                                        hari: true,
                                         semester: true,
+                                        tahun: true,
+                                        matakuliah: {
+                                                select: {
+                                                        id: true,
+                                                        nama: true,
+                                                        kode: true,
+                                                        type: true,
+                                                        sks: true,
+                                                        bidangMinat: true,
+                                                        semester: true,
+                                                },
+                                        },
                                 },
                         },
                 };
@@ -516,14 +570,14 @@ export async function getByMahasiswaId(mahasiswaId: string, filters: FilteringQu
         }
 }
 
-export type GetByMatakuliahIdResponse = PagedList<PendaftaranAsistenLabWithRelations[]> | {};
-export async function getByMatakuliahId(matakuliahId: string, filters: FilteringQueryV2): Promise<ServiceResponse<GetByMatakuliahIdResponse>> {
+export type GetByJadwalIdResponse = PagedList<PendaftaranAsistenLabWithRelations[]> | {};
+export async function getByJadwalId(jadwalId: string, filters: FilteringQueryV2): Promise<ServiceResponse<GetByJadwalIdResponse>> {
         try {
                 const usedFilters = buildFilterQueryLimitOffsetV2({
                         ...filters,
                         filters: {
                                 ...filters.filters,
-                                matakuliahId: matakuliahId,
+                                jadwalId: jadwalId,
                         },
                 });
 
@@ -538,15 +592,104 @@ export async function getByMatakuliahId(matakuliahId: string, filters: Filtering
                                         isActive: true,
                                 },
                         },
-                        matakuliah: {
+                        jadwal: {
+                                select: {
+                                        id: true,
+                                        hari: true,
+                                        semester: true,
+                                        tahun: true,
+                                        matakuliah: {
+                                                select: {
+                                                        id: true,
+                                                        nama: true,
+                                                        kode: true,
+                                                        type: true,
+                                                        sks: true,
+                                                        bidangMinat: true,
+                                                        semester: true,
+                                                },
+                                        },
+                                },
+                        },
+                };
+
+                const [pendaftaranAsistenLab, totalData] = await Promise.all([
+                        prisma.pendaftaranAsistenLab.findMany({
+                                ...usedFilters,
+                                include: includeRelations,
+                        }),
+                        prisma.pendaftaranAsistenLab.count({
+                                where: usedFilters.where,
+                        }),
+                ]);
+
+                let totalPage = 1;
+                if (totalData > usedFilters.take) totalPage = Math.ceil(totalData / usedFilters.take);
+
+                return {
+                        status: true,
+                        data: {
+                                entries: pendaftaranAsistenLab,
+                                totalData,
+                                totalPage,
+                        },
+                };
+        } catch (err) {
+                Logger.error(`PendaftaranAsistenLabService.getByJadwalId : ${err}`);
+                return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+        }
+}
+
+export type GetByMatakuliahIdResponse = PagedList<PendaftaranAsistenLabWithRelations[]> | {};
+export async function getByMatakuliahId(matakuliahId: string, filters: FilteringQueryV2): Promise<ServiceResponse<GetByMatakuliahIdResponse>> {
+        try {
+                // Since there's no direct matakuliahId in PendaftaranAsistenLab anymore,
+                // we need to filter through jadwal relationship
+                const jadwalIds = await prisma.jadwal.findMany({
+                        where: { matakuliahId },
+                        select: { id: true },
+                });
+
+                const jadwalIdArray = jadwalIds.map((jadwal) => jadwal.id);
+
+                const usedFilters = buildFilterQueryLimitOffsetV2({
+                        ...filters,
+                        filters: {
+                                ...filters.filters,
+                                jadwalId: {
+                                        in: jadwalIdArray,
+                                },
+                        },
+                });
+
+                const includeRelations = {
+                        mahasiswa: {
                                 select: {
                                         id: true,
                                         nama: true,
-                                        kode: true,
-                                        type: true,
-                                        sks: true,
-                                        bidangMinat: true,
+                                        npm: true,
                                         semester: true,
+                                        tahunMasuk: true,
+                                        isActive: true,
+                                },
+                        },
+                        jadwal: {
+                                select: {
+                                        id: true,
+                                        hari: true,
+                                        semester: true,
+                                        tahun: true,
+                                        matakuliah: {
+                                                select: {
+                                                        id: true,
+                                                        nama: true,
+                                                        kode: true,
+                                                        type: true,
+                                                        sks: true,
+                                                        bidangMinat: true,
+                                                        semester: true,
+                                                },
+                                        },
                                 },
                         },
                 };

@@ -27,3 +27,17 @@ export function getBaseUrl(c: Context): string {
         const url = new URL(c.req.url);
         return `${url.protocol}//${url.host}`;
 }
+
+export function getContentType(ext: string | undefined): string {
+        const types: Record<string, string> = {
+                pdf: "application/pdf",
+                jpg: "image/jpeg",
+                jpeg: "image/jpeg",
+                png: "image/png",
+                gif: "image/gif",
+                txt: "text/plain",
+                doc: "application/msword",
+                docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        };
+        return types[ext || ""] || "application/octet-stream";
+}

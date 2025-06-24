@@ -172,8 +172,9 @@ model PendaftaranAsistenLab {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
-  mahasiswa    Mahasiswa   @relation(fields: [mahasiswaId], references: [id])
-  jadwal       Jadwal      @relation(fields: [jadwalId], references: [id])
+  mahasiswa Mahasiswa @relation(fields: [mahasiswaId], references: [id])
+  jadwal    Jadwal    @relation(fields: [jadwalId], references: [id])
+
   Matakuliah   Matakuliah? @relation(fields: [matakuliahId], references: [id])
   matakuliahId String?
 }

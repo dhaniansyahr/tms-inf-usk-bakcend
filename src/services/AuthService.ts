@@ -92,6 +92,9 @@ export async function loginWithEmail(data: UserLoginDTO): Promise<ServiceRespons
                         where: {
                                 email: identity,
                         },
+                        include: {
+                                userLevel: true,
+                        },
                 });
 
                 const isPasswordVerified = await bcrypt.compareSync(password, user?.password);

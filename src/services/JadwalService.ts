@@ -115,24 +115,16 @@ export async function getAll(filters: FilteringQueryV2, type: string, user: User
                 };
 
                 // if not Operator, filter jadwal where they are assigned to them
-                if (type !== "OPERATOR") {
+                if (user.userLevel.name === "DOSEN") {
                         usedFilters.where.dosen = {
-                                id: { in: user.id },
-                        };
-                        usedFilters.where.asisten = {
-                                id: { in: user.id },
-                        };
-                        usedFilters.where.mahasiswa = {
                                 id: { in: user.id },
                         };
                 }
 
-                let schedules: any[];
-
-                if (type === "TABLE") {
-                        usedFilters.take;
-                } else {
-                        usedFilters.take = 10000;
+                if (user.userLevel.name === "MAHASISWA") {
+                        usedFilters.where.mahasiswa = {
+                                id: { in: user.id },
+                        };
                 }
 
                 const [jadwal, totalData] = await Promise.all([
@@ -150,37 +142,37 @@ export async function getAll(filters: FilteringQueryV2, type: string, user: User
                 let totalPage = 1;
                 if (totalData > usedFilters.take) totalPage = Math.ceil(totalData / usedFilters.take);
 
-                const dayGroups = new Map<string, any[]>();
+                // const dayGroups = new Map<string, any[]>();
 
-                jadwal.forEach((schedule) => {
-                        const day = schedule.hari;
-                        if (!dayGroups.has(day)) {
-                                dayGroups.set(day, []);
-                        }
-                        dayGroups.get(day)!.push(schedule);
-                });
+                // jadwal.forEach((schedule) => {
+                //         const day = schedule.hari;
+                //         if (!dayGroups.has(day)) {
+                //                 dayGroups.set(day, []);
+                //         }
+                //         dayGroups.get(day)!.push(schedule);
+                // });
 
-                const groupedByDay = Array.from(dayGroups.entries())
-                        .map(([hari, schedules]) => ({
-                                hari,
-                                schedules,
-                        }))
-                        .sort((a, b) => {
-                                const indexA = HARI_LIST.indexOf(a.hari as HARI);
-                                const indexB = HARI_LIST.indexOf(b.hari as HARI);
-                                return indexA - indexB;
-                        });
+                // const groupedByDay = Array.from(dayGroups.entries())
+                //         .map(([hari, schedules]) => ({
+                //                 hari,
+                //                 schedules,
+                //         }))
+                //         .sort((a, b) => {
+                //                 const indexA = HARI_LIST.indexOf(a.hari as HARI);
+                //                 const indexB = HARI_LIST.indexOf(b.hari as HARI);
+                //                 return indexA - indexB;
+                //         });
 
-                if (type === "TABLE") {
-                        schedules = jadwal;
-                } else {
-                        schedules = groupedByDay;
-                }
+                // if (type === "TABLE") {
+                //         schedules = jadwal;
+                // } else {
+                //         schedules = groupedByDay;
+                // }
 
                 return {
                         status: true,
                         data: {
-                                entries: schedules,
+                                entries: jadwal,
                                 totalData,
                                 totalPage,
                         },
@@ -390,8 +382,10 @@ export async function validateExistingSchedules(): Promise<ServiceResponse<any>>
         }
 }
 
-export async function getAvailableSchedule(day?: string): Promise<ServiceResponse<any>> {
+export async function getAvailableSchedule(filters: FilteringQueryV2, day?: string): Promise<ServiceResponse<any>> {
         try {
+                const usedFilters = buildFilterQueryLimitOffsetV2(filters);
+
                 // Get all active shifts
                 const allShifts = await prisma.shift.findMany({
                         where: { isActive: true },
@@ -525,6 +519,14 @@ export async function getAvailableSchedule(day?: string): Promise<ServiceRespons
                         return a.room.name.localeCompare(b.room.name);
                 });
 
+                // Apply pagination to the sorted results
+                const totalData = allFreeSlots.length;
+                const paginatedSlots = allFreeSlots.slice(usedFilters.skip, usedFilters.skip + usedFilters.take);
+
+                // Calculate total pages
+                let totalPage = 1;
+                if (totalData > usedFilters.take) totalPage = Math.ceil(totalData / usedFilters.take);
+
                 // Filter existing schedules by semester and year if provided
                 const filteredExistingSchedules = existingSchedules.filter((s) => s.semester === currentSemester && s.tahun === getCurrentAcademicYear());
 
@@ -538,7 +540,11 @@ export async function getAvailableSchedule(day?: string): Promise<ServiceRespons
                 return {
                         status: true,
                         data: {
-                                freeScheduleSlots: allFreeSlots,
+                                availableSchedules: {
+                                        entries: paginatedSlots,
+                                        totalData,
+                                        totalPage,
+                                },
                                 stats: {
                                         totalDays: daysToCheck.length,
                                         totalShifts: shiftCount,

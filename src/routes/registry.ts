@@ -8,6 +8,7 @@ import PendaftaranAsistenLabRoutes from "./PendaftaranAsistenLab";
 import UploadRoutes from "./UploadFile";
 import AbsensiRoutes from "./Absensi";
 import DashboardRoutes from "./Dashboard";
+import MeetingRoutes from "./Meeting";
 
 const RoutesRegistry = {
         UserRoutes,
@@ -20,6 +21,7 @@ const RoutesRegistry = {
         UploadRoutes,
         AbsensiRoutes,
         DashboardRoutes,
+        MeetingRoutes,
 };
 
 export default RoutesRegistry;

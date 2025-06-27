@@ -80,9 +80,10 @@ export async function deleteByIds(c: Context): Promise<TypedResponse> {
 }
 
 export async function checkFreeSchedule(c: Context): Promise<TypedResponse> {
+        const filters: FilteringQueryV2 = checkFilteringQueryV2(c);
         const day = c.req.query("day");
 
-        const serviceResponse = await JadwalService.getAvailableSchedule(day);
+        const serviceResponse = await JadwalService.getAvailableSchedule(filters, day);
 
         if (!serviceResponse.status) {
                 return handleServiceErrorWithResponse(c, serviceResponse);

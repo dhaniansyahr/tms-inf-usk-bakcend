@@ -13,9 +13,6 @@ import { ulid } from "ulid";
 export type CreateResponse = Jadwal | {};
 export async function create(data: JadwalDTO): Promise<ServiceResponse<CreateResponse>> {
         try {
-                data.semester = isGanjilSemester() ? SEMESTER.GANJIL : SEMESTER.GENAP;
-                data.tahun = getCurrentAcademicYear();
-
                 const existingSchedules = await jadwalGeneticService.getExistingSchedules();
 
                 if (!existingSchedules) return BadRequestWithMessage("Tidak ada Jadwal yang ditemukan!");
@@ -27,8 +24,8 @@ export async function create(data: JadwalDTO): Promise<ServiceResponse<CreateRes
                         shiftId: data.shiftId,
                         dosenIds: data.dosenIds,
                         hari: data.hari,
-                        semester: data.semester,
-                        tahun: data.tahun,
+                        semester: isGanjilSemester() ? SEMESTER.GANJIL : SEMESTER.GENAP,
+                        tahun: getCurrentAcademicYear(),
                         mahasiswaIds: data.mahasiswaIds || [],
                         asistenLabIds: data.asistenLabIds || [],
                         fitness: 0,
@@ -52,6 +49,8 @@ export async function create(data: JadwalDTO): Promise<ServiceResponse<CreateRes
                 const jadwal = await prisma.jadwal.create({
                         data: {
                                 ...jadwalData,
+                                semester: isGanjilSemester() ? SEMESTER.GANJIL : SEMESTER.GENAP,
+                                tahun: getCurrentAcademicYear(),
                                 dosen: {
                                         connect: dosenIds.map((dosenId) => ({ id: dosenId })),
                                 },
@@ -143,33 +142,6 @@ export async function getAll(filters: FilteringQueryV2, type: string, user: User
                 let totalPage = 1;
                 if (totalData > usedFilters.take) totalPage = Math.ceil(totalData / usedFilters.take);
 
-                // const dayGroups = new Map<string, any[]>();
-
-                // jadwal.forEach((schedule) => {
-                //         const day = schedule.hari;
-                //         if (!dayGroups.has(day)) {
-                //                 dayGroups.set(day, []);
-                //         }
-                //         dayGroups.get(day)!.push(schedule);
-                // });
-
-                // const groupedByDay = Array.from(dayGroups.entries())
-                //         .map(([hari, schedules]) => ({
-                //                 hari,
-                //                 schedules,
-                //         }))
-                //         .sort((a, b) => {
-                //                 const indexA = HARI_LIST.indexOf(a.hari as HARI);
-                //                 const indexB = HARI_LIST.indexOf(b.hari as HARI);
-                //                 return indexA - indexB;
-                //         });
-
-                // if (type === "TABLE") {
-                //         schedules = jadwal;
-                // } else {
-                //         schedules = groupedByDay;
-                // }
-
                 return {
                         status: true,
                         data: {
@@ -226,7 +198,7 @@ export async function getById(id: string): Promise<ServiceResponse<GetByIdRespon
 }
 
 export type UpdateResponse = Jadwal | {};
-export async function update(id: string, data: JadwalDTO): Promise<ServiceResponse<UpdateResponse>> {
+export async function update(id: string, data: Partial<JadwalDTO>): Promise<ServiceResponse<UpdateResponse>> {
         try {
                 let jadwal = await prisma.jadwal.findUnique({
                         where: {

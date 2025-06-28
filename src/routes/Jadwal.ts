@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import * as JadwalController from "$controllers/rest/JadwalController";
 import * as AuthMiddleware from "$middlewares/authMiddleware";
+import * as JadwalValidation from "$validations/JdwalValidation";
 
 const JadwalRoutes = new Hono();
 
@@ -12,7 +13,7 @@ JadwalRoutes.get("/mata-kuliah", AuthMiddleware.checkJwt, JadwalController.getAl
 
 JadwalRoutes.get("/:id", AuthMiddleware.checkJwt, JadwalController.getById);
 
-JadwalRoutes.post("/", AuthMiddleware.checkJwt, JadwalController.create);
+JadwalRoutes.post("/", AuthMiddleware.checkJwt, JadwalValidation.validateJadwal, JadwalController.create);
 
 JadwalRoutes.post("/generate-all", AuthMiddleware.checkJwt, JadwalController.generateAllAvailableSchedules);
 

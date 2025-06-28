@@ -8,8 +8,6 @@ export interface JadwalDTO {
         ruanganId: string;
         shiftId: string;
         hari: HARI;
-        semester: SEMESTER;
-        tahun: string;
         asistenLabIds?: string[];
         mahasiswaIds?: string[];
         isOverride?: boolean;

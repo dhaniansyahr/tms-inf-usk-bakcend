@@ -8,6 +8,7 @@ import { buildFilterQueryLimitOffsetV2 } from "./helpers/FilterQueryV2";
 import { HARI, HARI_LIST, jadwalGeneticService } from "./JadwalGeneticService";
 import { getCurrentAcademicYear, isGanjilSemester } from "$utils/strings.utils";
 import { UserJWTDAO } from "$entities/User";
+import { ulid } from "ulid";
 
 export type CreateResponse = Jadwal | {};
 export async function create(data: JadwalDTO): Promise<ServiceResponse<CreateResponse>> {
@@ -519,9 +520,15 @@ export async function getAvailableSchedule(filters: FilteringQueryV2, day?: stri
                         return a.room.name.localeCompare(b.room.name);
                 });
 
+                // Giving ID to allFreeSlots
+                const slotsWithIds = allFreeSlots.map((slot, index) => ({
+                        ...slot,
+                        id: ulid,
+                }));
+
                 // Apply pagination to the sorted results
-                const totalData = allFreeSlots.length;
-                const paginatedSlots = allFreeSlots.slice(usedFilters.skip, usedFilters.skip + usedFilters.take);
+                const totalData = slotsWithIds.length;
+                const paginatedSlots = slotsWithIds.slice(usedFilters.skip, usedFilters.skip + usedFilters.take);
 
                 // Calculate total pages
                 let totalPage = 1;
@@ -535,7 +542,7 @@ export async function getAvailableSchedule(filters: FilteringQueryV2, day?: stri
                 const roomCount = allRooms.length;
                 const totalPossibleSlots = shiftCount * roomCount * daysToCheck.length;
                 const occupiedSlotCount = filteredExistingSchedules.length;
-                const freeSlotCount = allFreeSlots.length;
+                const freeSlotCount = slotsWithIds.length;
 
                 return {
                         status: true,

@@ -20,4 +20,6 @@ JadwalRoutes.delete("/", AuthMiddleware.checkJwt, JadwalController.deleteByIds);
 
 JadwalRoutes.post("/check", AuthMiddleware.checkJwt, JadwalController.checkFreeSchedule);
 
+JadwalRoutes.get("/mata-kuliah", AuthMiddleware.checkJwt, JadwalController.getAllMatakuliah);
+
 export default JadwalRoutes;

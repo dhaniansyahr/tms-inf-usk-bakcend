@@ -521,9 +521,9 @@ export async function getAvailableSchedule(filters: FilteringQueryV2, day?: stri
                 });
 
                 // Giving ID to allFreeSlots
-                const slotsWithIds = allFreeSlots.map((slot, index) => ({
+                const slotsWithIds = allFreeSlots.map((slot) => ({
                         ...slot,
-                        id: ulid,
+                        id: ulid(),
                 }));
 
                 // Apply pagination to the sorted results

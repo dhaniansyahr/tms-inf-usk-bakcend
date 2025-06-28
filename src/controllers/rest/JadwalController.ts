@@ -32,6 +32,18 @@ export async function getAll(c: Context): Promise<TypedResponse> {
         return response_success(c, serviceResponse.data, "Successfully fetched all Jadwal!");
 }
 
+export async function getAllMatakuliah(c: Context): Promise<TypedResponse> {
+        const filters: FilteringQueryV2 = checkFilteringQueryV2(c);
+
+        const serviceResponse = await JadwalService.getAllMatakuliah(filters);
+
+        if (!serviceResponse.status) {
+                return handleServiceErrorWithResponse(c, serviceResponse);
+        }
+
+        return response_success(c, serviceResponse.data, "Successfully fetched all Jadwal!");
+}
+
 export async function getById(c: Context): Promise<TypedResponse> {
         const id = c.req.param("id");
 

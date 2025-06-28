@@ -2,7 +2,7 @@ import { FilteringQueryV2, PagedList } from "$entities/Query";
 import { BadRequestWithMessage, INTERNAL_SERVER_ERROR_SERVICE_RESPONSE, INVALID_ID_SERVICE_RESPONSE, ServiceResponse } from "$entities/Service";
 import Logger from "$pkg/logger";
 import { prisma } from "$utils/prisma.utils";
-import { Jadwal, SEMESTER } from "@prisma/client";
+import { Jadwal, Matakuliah, SEMESTER } from "@prisma/client";
 import { JadwalDTO } from "$entities/Jadwal";
 import { buildFilterQueryLimitOffsetV2 } from "./helpers/FilterQueryV2";
 import { HARI, HARI_LIST, jadwalGeneticService } from "./JadwalGeneticService";
@@ -711,5 +711,34 @@ export async function generateAllAvailableSchedules(preferredDay?: string): Prom
                         err: { message: (err as Error).message, code: 500 },
                         data: [],
                 };
+        }
+}
+
+export type GetAllMatakuliahResponse = PagedList<Matakuliah[]> | {};
+export async function getAllMatakuliah(filters: FilteringQueryV2): Promise<ServiceResponse<GetAllMatakuliahResponse>> {
+        try {
+                const usedFilters = buildFilterQueryLimitOffsetV2(filters);
+
+                const [matakuliah, totalData] = await Promise.all([
+                        prisma.matakuliah.findMany(usedFilters),
+                        prisma.matakuliah.count({
+                                where: usedFilters.where,
+                        }),
+                ]);
+
+                let totalPage = 1;
+                if (totalData > usedFilters.take) totalPage = Math.ceil(totalData / usedFilters.take);
+
+                return {
+                        status: true,
+                        data: {
+                                entries: matakuliah,
+                                totalData,
+                                totalPage,
+                        },
+                };
+        } catch (err) {
+                Logger.error(`JadwalService.getAllMatakuliah : ${err} `);
+                return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
         }
 }

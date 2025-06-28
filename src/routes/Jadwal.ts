@@ -8,6 +8,8 @@ JadwalRoutes.get("/", AuthMiddleware.checkJwt, JadwalController.getAll);
 
 JadwalRoutes.get("/diagnose", AuthMiddleware.checkJwt, JadwalController.diagnoseScheduling);
 
+JadwalRoutes.get("/mata-kuliah", AuthMiddleware.checkJwt, JadwalController.getAllMatakuliah);
+
 JadwalRoutes.get("/:id", AuthMiddleware.checkJwt, JadwalController.getById);
 
 JadwalRoutes.post("/", AuthMiddleware.checkJwt, JadwalController.create);
@@ -19,7 +21,5 @@ JadwalRoutes.put("/:id", AuthMiddleware.checkJwt, JadwalController.update);
 JadwalRoutes.delete("/", AuthMiddleware.checkJwt, JadwalController.deleteByIds);
 
 JadwalRoutes.post("/check", AuthMiddleware.checkJwt, JadwalController.checkFreeSchedule);
-
-JadwalRoutes.get("/mata-kuliah", AuthMiddleware.checkJwt, JadwalController.getAllMatakuliah);
 
 export default JadwalRoutes;

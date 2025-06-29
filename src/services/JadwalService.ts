@@ -190,8 +190,25 @@ export async function create(data: JadwalDTO): Promise<ServiceResponse<CreateRes
                                 matakuliah: true,
                                 ruangan: true,
                                 shift: true,
+                                Meeting: true,
                         },
                 });
+
+                const meetingDates = await jadwalGeneticService.generateMeetingDates(jadwal.id, 12);
+
+                // Create meeting records
+                await Promise.all(
+                        meetingDates.map((dateStr, index) =>
+                                prisma.meeting.create({
+                                        data: {
+                                                id: ulid(),
+                                                jadwalId: jadwal.id,
+                                                tanggal: dateStr, // Using string instead of Date
+                                                pertemuan: index + 1,
+                                        },
+                                })
+                        )
+                );
 
                 return {
                         status: true,

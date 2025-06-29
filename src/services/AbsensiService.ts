@@ -66,7 +66,7 @@ export async function create(data: AbsentDTO): Promise<ServiceResponse<CreateRes
                                         meetingId: data.meetingId,
                                         isPresent: data.isPresent,
                                         keterangan: keterangan,
-                                        waktuAbsen: DateTime.now().toFormat("yyyy-MM-dd HH:mm:ss"),
+                                        waktuAbsen: DateTime.now().toJSDate(),
                                 },
                         });
                 }

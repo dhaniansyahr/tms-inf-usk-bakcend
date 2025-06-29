@@ -20,10 +20,9 @@ export async function create(c: Context): Promise<TypedResponse> {
 
 export async function getAll(c: Context): Promise<TypedResponse> {
         const filters: FilteringQueryV2 = checkFilteringQueryV2(c);
-        const type = c.req.query("type") as string;
         const user: UserJWTDAO = c.get("jwtPayload");
 
-        const serviceResponse = await JadwalService.getAll(filters, type, user);
+        const serviceResponse = await JadwalService.getAll(filters, user);
 
         if (!serviceResponse.status) {
                 return handleServiceErrorWithResponse(c, serviceResponse);

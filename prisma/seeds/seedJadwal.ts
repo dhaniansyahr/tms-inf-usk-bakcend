@@ -1,15 +1,16 @@
 /**
- * JADWAL SEEDER FOR NON-PRAKTIKUM MATAKULIAH
- * ==========================================
+ * JADWAL SEEDER FOR THEORY MATAKULIAH
+ * ===================================
  *
- * This seeder creates jadwal (schedules) specifically for matakuliah that DON'T contain "PRAKTIKUM" in their name.
+ * This seeder creates jadwal (schedules) specifically for theory matakuliah (isTeori = true).
  *
  * Features:
- * - ✅ Filters out matakuliah with "PRAKTIKUM" in name
- * - ✅ Maximum 50 mahasiswa per jadwal
+ * - ✅ Filters for theory courses only (isTeori = true)
+ * - ✅ Maximum 50 mahasiswa per class (kelas)
+ * - ✅ Limited to maximum 2 classes (A, B) per course to ensure all courses get scheduled
  * - ✅ Multiple dosen per jadwal (many-to-many)
  * - ✅ Multiple mahasiswa per jadwal (many-to-many)
- * - ✅ No asisten assignment (only for regular courses)
+ * - ✅ No asisten assignment (only for theory courses)
  * - ✅ Validates dosen-matakuliah compatibility (bidang minat)
  * - ✅ Validates mahasiswa-matakuliah eligibility (semester rules)
  * - ✅ Prevents time slot conflicts (room, dosen, shift)
@@ -23,15 +24,17 @@
  * 3. Students in even semesters (2,4,6,8) can take: semester 2 + their semester + their semester+4
  * 4. UMUM courses can be taught by any dosen
  * 5. Other courses must match dosen's bidang minat
- * 6. Non-PRAKTIKUM courses have max 50 students
- * 7. No asisten assignment for regular courses
+ * 6. Theory courses have max 50 students per class
+ * 7. Maximum 2 classes (A, B) per course to ensure all courses can be scheduled
+ * 8. If >100 students eligible, only first 100 students are assigned (50 per class)
+ * 9. No asisten assignment for theory courses
  *
  * Usage:
  * - npm run seed (runs all seeders including this one)
  * - npm run seed:jadwal (runs only this seeder)
  *
  * Prerequisites:
- * - Matakuliah must exist (non-PRAKTIKUM)
+ * - Matakuliah must exist with isTeori = true
  * - Ruangan must exist (preferably "Ruang Kuliah")
  * - Shift must exist and be active
  * - Dosen must exist
@@ -132,26 +135,78 @@ function selectValidDosenForMatakuliah(matakuliah: any, allDosen: any[], maxDose
  * Selects valid mahasiswa for a matakuliah based on semester rules
  * @param matakuliah - The course to assign students to
  * @param allMahasiswa - Array of all available students
- * @returns Array of valid students (max 50 for non-PRAKTIKUM)
+ * @returns Array of valid students (all eligible students)
  */
 function selectValidMahasiswaForMatakuliah(matakuliah: any, allMahasiswa: any[]): any[] {
-        // Non-PRAKTIKUM courses have max 50 students
-        const maxStudents = 50;
-
         const validMahasiswa = allMahasiswa.filter((mahasiswa) => canStudentTakeCourse(mahasiswa.semester, matakuliah.semester));
 
         if (validMahasiswa.length === 0) {
                 return [];
         }
 
-        // Shuffle and take maximum 50 students
+        // Shuffle all valid students
         const shuffled = validMahasiswa.sort(() => 0.5 - Math.random());
-        const selectedStudents = shuffled.slice(0, Math.min(maxStudents, validMahasiswa.length));
 
         // Log selection details
-        console.log(`📚 ${matakuliah.nama} (S${matakuliah.semester}): ${validMahasiswa.length} eligible → ${selectedStudents.length} assigned`);
+        console.log(`📚 ${matakuliah.nama} (S${matakuliah.semester}): ${validMahasiswa.length} eligible students found`);
 
-        return selectedStudents;
+        return shuffled;
+}
+
+/**
+ * Divides students into classes with maximum 2 classes (A and B) to ensure all courses can be scheduled
+ * @param students - Array of students to divide
+ * @returns Array of student groups with class names (max 2 classes)
+ */
+function divideStudentsIntoClasses(students: any[]): { kelas: string; mahasiswa: any[] }[] {
+        const maxStudentsPerClass = 50;
+        const maxClasses = 2; // Limit to 2 classes (A and B) to ensure all courses get scheduled
+        const classes: { kelas: string; mahasiswa: any[] }[] = [];
+        const classNames = ["A", "B"]; // Only A and B classes
+
+        // If we have very few students, just create one class
+        if (students.length <= maxStudentsPerClass) {
+                return [
+                        {
+                                kelas: "A",
+                                mahasiswa: students,
+                        },
+                ];
+        }
+
+        // If we have more than 50 but less than or equal to 100 students, create 2 classes
+        if (students.length <= maxStudentsPerClass * maxClasses) {
+                const studentsPerClass = Math.ceil(students.length / maxClasses);
+
+                for (let i = 0; i < maxClasses; i++) {
+                        const startIndex = i * studentsPerClass;
+                        const endIndex = Math.min(startIndex + studentsPerClass, students.length);
+                        const studentsInClass = students.slice(startIndex, endIndex);
+
+                        if (studentsInClass.length > 0) {
+                                classes.push({
+                                        kelas: classNames[i],
+                                        mahasiswa: studentsInClass,
+                                });
+                        }
+                }
+        } else {
+                // If we have more than 100 students, limit to 2 classes of 50 each (first 100 students)
+                console.log(`⚠️  Course has ${students.length} eligible students, limiting to first 100 students (2 classes) to ensure all courses can be scheduled`);
+
+                for (let i = 0; i < maxClasses; i++) {
+                        const startIndex = i * maxStudentsPerClass;
+                        const endIndex = startIndex + maxStudentsPerClass;
+                        const studentsInClass = students.slice(startIndex, endIndex);
+
+                        classes.push({
+                                kelas: classNames[i],
+                                mahasiswa: studentsInClass,
+                        });
+                }
+        }
+
+        return classes;
 }
 
 /**
@@ -222,7 +277,7 @@ function generateMeetingDates(hari: HARI, semester: SEMESTER, tahun: string, num
  */
 export async function seedJadwal(prisma: PrismaClient) {
         // Get current semester and academic year
-        const currentSemester = isGanjilSemester() ? SEMESTER.GANJIL : SEMESTER.GENAP;
+        const currentSemester = isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL;
         const currentYear = getCurrentAcademicYear();
 
         // Check if jadwal already exists for current semester/year
@@ -241,14 +296,10 @@ export async function seedJadwal(prisma: PrismaClient) {
 
         // Fetch all required data
         const [matakuliah, ruangan, shift, dosen, mahasiswa] = await Promise.all([
-                // Get matakuliah that DON'T contain "PRAKTIKUM" in their name
+                // Get theory matakuliah only (isTeori = true)
                 prisma.matakuliah.findMany({
                         where: {
-                                nama: {
-                                        not: {
-                                                contains: "PRAKTIKUM",
-                                        },
-                                },
+                                isTeori: true,
                         },
                         include: {
                                 dosenPengampuMK: {
@@ -280,7 +331,7 @@ export async function seedJadwal(prisma: PrismaClient) {
         ]);
 
         if (matakuliah.length === 0) {
-                console.log("❌ No non-PRAKTIKUM matakuliah found!");
+                console.log("❌ No theory matakuliah found!");
                 return;
         }
 
@@ -294,7 +345,7 @@ export async function seedJadwal(prisma: PrismaClient) {
                 return;
         }
 
-        // Prioritize classroom-type ruangan for non-praktikum courses
+        // Prioritize classroom-type ruangan for theory courses
         const classroomRuangan = ruangan.filter((r) => r.nama.toLowerCase().includes("ruang kuliah") || r.nama.toLowerCase().includes("kelas"));
         const availableRuangan = classroomRuangan.length > 0 ? classroomRuangan : ruangan;
 
@@ -303,7 +354,7 @@ export async function seedJadwal(prisma: PrismaClient) {
         const successfulSchedules: any[] = [];
         const failedSchedules: any[] = [];
 
-        // Create jadwal for each non-PRAKTIKUM matakuliah
+        // Create jadwal for each theory matakuliah
         for (let i = 0; i < matakuliah.length; i++) {
                 const mk = matakuliah[i];
 
@@ -319,7 +370,7 @@ export async function seedJadwal(prisma: PrismaClient) {
                                 continue;
                         }
 
-                        // Find valid mahasiswa (max 50 for non-PRAKTIKUM)
+                        // Find all valid mahasiswa
                         const validMahasiswa = selectValidMahasiswaForMatakuliah(mk, mahasiswa);
 
                         if (validMahasiswa.length === 0) {
@@ -331,97 +382,106 @@ export async function seedJadwal(prisma: PrismaClient) {
                                 continue;
                         }
 
-                        // Try to find available time slot
-                        let scheduleCreated = false;
-                        let attempts = 0;
-                        const maxAttempts = 100;
+                        // Divide students into classes (max 50 per class)
+                        const classes = divideStudentsIntoClasses(validMahasiswa);
+                        console.log(`📊 ${mk.nama}: Creating ${classes.length} class(es) for ${validMahasiswa.length} students`);
 
-                        while (!scheduleCreated && attempts < maxAttempts) {
-                                attempts++;
+                        // Create jadwal for each class
+                        for (const classData of classes) {
+                                let scheduleCreated = false;
+                                let attempts = 0;
+                                const maxAttempts = 100;
 
-                                // Random selection of day, shift, and room
-                                const randomHari = HARI_LIST[Math.floor(Math.random() * HARI_LIST.length)];
-                                const randomShift = shift[Math.floor(Math.random() * shift.length)];
-                                const randomRuangan = availableRuangan[Math.floor(Math.random() * availableRuangan.length)];
+                                while (!scheduleCreated && attempts < maxAttempts) {
+                                        attempts++;
 
-                                const dosenIds = validDosen.map((d) => d.id);
+                                        // Random selection of day, shift, and room
+                                        const randomHari = HARI_LIST[Math.floor(Math.random() * HARI_LIST.length)];
+                                        const randomShift = shift[Math.floor(Math.random() * shift.length)];
+                                        const randomRuangan = availableRuangan[Math.floor(Math.random() * availableRuangan.length)];
 
-                                // Check if time slot is available
-                                if (!isTimeSlotOccupied(randomHari, randomShift.id, randomRuangan.id, dosenIds, createdSchedules)) {
-                                        // Create the jadwal with many-to-many relationships (no asisten for non-PRAKTIKUM)
-                                        const jadwalId = ulid();
-                                        const jadwal = await prisma.jadwal.create({
-                                                data: {
-                                                        id: jadwalId,
-                                                        matakuliahId: mk.id,
-                                                        ruanganId: randomRuangan.id,
-                                                        shiftId: randomShift.id,
-                                                        hari: randomHari,
-                                                        semester: currentSemester,
-                                                        tahun: currentYear,
-                                                        // Connect multiple dosen
-                                                        dosen: {
-                                                                connect: validDosen.map((d) => ({ id: d.id })),
-                                                        },
-                                                        // Connect multiple mahasiswa
-                                                        mahasiswa: {
-                                                                connect: validMahasiswa.map((m) => ({ id: m.id })),
-                                                        },
-                                                        // No asisten for non-PRAKTIKUM courses
-                                                },
-                                        });
+                                        const dosenIds = validDosen.map((d) => d.id);
 
-                                        // Generate and create meeting dates
-                                        const meetingDates = generateMeetingDates(randomHari, currentSemester, currentYear, 12);
-                                        const meetings = await Promise.all(
-                                                meetingDates.map((dateStr, index) =>
-                                                        prisma.meeting.create({
-                                                                data: {
-                                                                        id: ulid(),
-                                                                        jadwalId: jadwal.id,
-                                                                        tanggal: dateStr,
-                                                                        pertemuan: index + 1,
+                                        // Check if time slot is available
+                                        if (!isTimeSlotOccupied(randomHari, randomShift.id, randomRuangan.id, dosenIds, createdSchedules)) {
+                                                // Create the jadwal with many-to-many relationships (no asisten for theory courses)
+                                                const jadwalId = ulid();
+                                                const jadwal = await prisma.jadwal.create({
+                                                        data: {
+                                                                id: jadwalId,
+                                                                matakuliahId: mk.id,
+                                                                ruanganId: randomRuangan.id,
+                                                                shiftId: randomShift.id,
+                                                                hari: randomHari,
+                                                                semester: currentSemester,
+                                                                tahun: currentYear,
+                                                                kelas: classData.kelas, // Set the class name (A, B, C, etc.)
+                                                                // Connect multiple dosen
+                                                                dosen: {
+                                                                        connect: validDosen.map((d) => ({ id: d.id })),
                                                                 },
-                                                        })
-                                                )
-                                        );
+                                                                // Connect mahasiswa for this specific class
+                                                                mahasiswa: {
+                                                                        connect: classData.mahasiswa.map((m) => ({ id: m.id })),
+                                                                },
+                                                                // No asisten for theory courses
+                                                        },
+                                                });
 
-                                        // Track the created schedule
-                                        createdSchedules.push({
-                                                hari: randomHari,
-                                                shiftId: randomShift.id,
-                                                ruanganId: randomRuangan.id,
-                                                dosenIds: dosenIds,
-                                                matakuliahId: mk.id,
-                                        });
+                                                // Generate and create meeting dates
+                                                const meetingDates = generateMeetingDates(randomHari, currentSemester, currentYear, 12);
+                                                const meetings = await Promise.all(
+                                                        meetingDates.map((dateStr, index) =>
+                                                                prisma.meeting.create({
+                                                                        data: {
+                                                                                id: ulid(),
+                                                                                jadwalId: jadwal.id,
+                                                                                tanggal: dateStr,
+                                                                                pertemuan: index + 1,
+                                                                        },
+                                                                })
+                                                        )
+                                                );
 
-                                        successfulSchedules.push({
-                                                jadwal,
-                                                meetings: meetings.length,
-                                                enrolledStudents: validMahasiswa.length,
-                                                assignedDosen: validDosen.length,
-                                                matakuliah: mk.nama,
-                                                dosen: validDosen.map((d) => d.nama).join(", "),
-                                                ruangan: randomRuangan.nama,
-                                                shift: `${randomShift.startTime} - ${randomShift.endTime}`,
-                                                hari: randomHari,
-                                                courseType: "KULIAH",
-                                        });
+                                                // Track the created schedule
+                                                createdSchedules.push({
+                                                        hari: randomHari,
+                                                        shiftId: randomShift.id,
+                                                        ruanganId: randomRuangan.id,
+                                                        dosenIds: dosenIds,
+                                                        matakuliahId: mk.id,
+                                                        kelas: classData.kelas,
+                                                });
 
-                                        console.log(`✅ ${mk.nama}: ${validMahasiswa.length} students assigned (max: 50)`);
-                                        scheduleCreated = true;
-                                } else {
-                                        // Time slot occupied, try again
-                                        continue;
+                                                successfulSchedules.push({
+                                                        jadwal,
+                                                        meetings: meetings.length,
+                                                        enrolledStudents: classData.mahasiswa.length,
+                                                        assignedDosen: validDosen.length,
+                                                        matakuliah: mk.nama,
+                                                        kelas: classData.kelas,
+                                                        dosen: validDosen.map((d) => d.nama).join(", "),
+                                                        ruangan: randomRuangan.nama,
+                                                        shift: `${randomShift.startTime} - ${randomShift.endTime}`,
+                                                        hari: randomHari,
+                                                        courseType: "TEORI",
+                                                });
+
+                                                console.log(`✅ ${mk.nama} - Kelas ${classData.kelas}: ${classData.mahasiswa.length} students assigned`);
+                                                scheduleCreated = true;
+                                        } else {
+                                                // Time slot occupied, try again
+                                                continue;
+                                        }
                                 }
-                        }
 
-                        if (!scheduleCreated) {
-                                console.log(`❌ Could not find available time slot for ${mk.nama} after ${maxAttempts} attempts`);
-                                failedSchedules.push({
-                                        matakuliah: mk.nama,
-                                        reason: `No available time slots after ${maxAttempts} attempts`,
-                                });
+                                if (!scheduleCreated) {
+                                        console.log(`❌ Could not find available time slot for ${mk.nama} - Kelas ${classData.kelas} after ${maxAttempts} attempts`);
+                                        failedSchedules.push({
+                                                matakuliah: `${mk.nama} - Kelas ${classData.kelas}`,
+                                                reason: `No available time slots after ${maxAttempts} attempts`,
+                                        });
+                                }
                         }
                 } catch (error) {
                         console.error(`❌ Error creating jadwal for ${mk.nama}:`, error);
@@ -434,12 +494,40 @@ export async function seedJadwal(prisma: PrismaClient) {
 
         // Summary
         if (successfulSchedules.length > 0) {
+                console.log(`\n🎉 SEEDING SUMMARY FOR ${currentSemester} ${currentYear}`);
                 console.log(`✅ Successfully created: ${successfulSchedules.length} jadwal`);
+
+                // Group by matakuliah to show class distribution
+                const courseStats = successfulSchedules.reduce((acc: any, schedule: any) => {
+                        const courseName = schedule.matakuliah;
+                        if (!acc[courseName]) {
+                                acc[courseName] = {
+                                        classes: [],
+                                        totalStudents: 0,
+                                        dosen: schedule.dosen,
+                                };
+                        }
+                        acc[courseName].classes.push({
+                                kelas: schedule.kelas,
+                                students: schedule.enrolledStudents,
+                        });
+                        acc[courseName].totalStudents += schedule.enrolledStudents;
+                        return acc;
+                }, {});
+
+                console.log(`\n📊 CLASS DISTRIBUTION:`);
+                Object.entries(courseStats).forEach(([courseName, stats]: [string, any]) => {
+                        const classInfo = stats.classes.map((c: any) => `${c.kelas}(${c.students})`).join(", ");
+                        console.log(`   ${courseName}: ${stats.classes.length} kelas - ${classInfo} = ${stats.totalStudents} total students`);
+                });
         }
 
         if (failedSchedules.length > 0) {
-                console.log(`❌ Failed to create: ${failedSchedules.length} jadwal`);
+                console.log(`\n❌ Failed to create: ${failedSchedules.length} jadwal`);
+                failedSchedules.forEach((failed) => {
+                        console.log(`   - ${failed.matakuliah}: ${failed.reason}`);
+                });
         }
 
-        console.log(`🎯 Jadwal seeding completed for ${currentSemester} ${currentYear}!`);
+        console.log(`\n🎯 Jadwal seeding completed for ${currentSemester} ${currentYear}!`);
 }

@@ -10,4 +10,6 @@ MeetingRoutes.put("/:id", AuthMiddleware.checkJwt, MeetingController.update);
 
 MeetingRoutes.get("/jadwal/:jadwalId", AuthMiddleware.checkJwt, MeetingController.getAll);
 
+MeetingRoutes.get("/jadwal/:jadwalId/participants", AuthMiddleware.checkJwt, MeetingController.getParticipants);
+
 export default MeetingRoutes;

@@ -8,6 +8,7 @@ export interface JadwalDTO {
         ruanganId: string;
         shiftId: string;
         hari: HARI;
+        kelas?: string;
         asistenLabIds?: string[];
         mahasiswaIds?: string[];
         isOverride?: boolean;
@@ -21,6 +22,7 @@ export interface CreateJadwalDTO {
         hari: HARI;
         semester: SEMESTER;
         tahun: string;
+        kelas?: string;
         asistenLabIds?: string[];
         mahasiswaIds?: string[];
         isOverride?: boolean;
@@ -34,6 +36,7 @@ export interface UpdateJadwalDTO {
         hari?: HARI;
         semester?: SEMESTER;
         tahun?: string;
+        kelas?: string;
         asistenLabIds?: string[];
         mahasiswaIds?: string[];
         isOverride?: boolean;

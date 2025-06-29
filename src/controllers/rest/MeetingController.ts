@@ -42,3 +42,15 @@ export async function update(c: Context): Promise<TypedResponse> {
 
         return response_success(c, serviceResponse.data, "Successfully updated Meeting!");
 }
+
+export async function getParticipants(c: Context): Promise<TypedResponse> {
+        const jadwalId = c.req.param("jadwalId") as string;
+
+        const serviceResponse = await MeetingService.getListParticipantsByJadwalId(jadwalId);
+
+        if (!serviceResponse.status) {
+                return handleServiceErrorWithResponse(c, serviceResponse);
+        }
+
+        return response_success(c, serviceResponse.data, "Successfully fetched participants with meeting attendance!");
+}

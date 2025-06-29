@@ -405,3 +405,153 @@ export async function getMeetingsByJadwalId(jadwalId: string): Promise<ServiceRe
                 return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
         }
 }
+
+export async function getListMahasiswaByJadwalId(jadwalId: string): Promise<ServiceResponse<{}>> {
+        try {
+                const mahasiswa = await prisma.mahasiswa.findMany({
+                        where: {
+                                jadwal: {
+                                        some: {
+                                                id: jadwalId,
+                                        },
+                                },
+                        },
+                });
+
+                return {
+                        status: true,
+                        data: mahasiswa,
+                };
+        } catch (err) {
+                Logger.error(`MeetingService.getListMahasiswaByJadwalId : ${err}`);
+                return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+        }
+}
+
+export async function getListParticipantsByJadwalId(jadwalId: string): Promise<ServiceResponse<{}>> {
+        try {
+                // Get all meetings for this jadwal
+                const meetings = await prisma.meeting.findMany({
+                        where: {
+                                jadwalId: jadwalId,
+                        },
+                        orderBy: {
+                                pertemuan: "asc",
+                        },
+                });
+
+                // Get all dosen for this jadwal
+                const dosenList = await prisma.dosen.findMany({
+                        where: {
+                                jadwalDosen: {
+                                        some: {
+                                                id: jadwalId,
+                                        },
+                                },
+                        },
+                });
+
+                // Get all mahasiswa for this jadwal
+                const mahasiswaList = await prisma.mahasiswa.findMany({
+                        where: {
+                                jadwal: {
+                                        some: {
+                                                id: jadwalId,
+                                        },
+                                },
+                        },
+                });
+
+                // Get all absensi records for this jadwal
+                const absensiRecords = await prisma.absensi.findMany({
+                        where: {
+                                jadwalId: jadwalId,
+                        },
+                        include: {
+                                meeting: true,
+                        },
+                });
+
+                // Process dosen with their meeting attendance
+                const dosenWithMeetings = dosenList.map((dosen) => {
+                        const dosenMeetings = meetings.map((meeting) => {
+                                // Find absensi record for this dosen and meeting
+                                const absensi = absensiRecords.find((record) => record.dosenId === dosen.id && record.meetingId === meeting.id);
+
+                                return {
+                                        id: meeting.id,
+                                        pertemuan: meeting.pertemuan,
+                                        tanggal: meeting.tanggal,
+                                        isPresent: absensi ? absensi.isPresent : false,
+                                        keterangan: absensi ? absensi.keterangan : null,
+                                        waktuAbsen: absensi ? absensi.waktuAbsen : null,
+                                };
+                        });
+
+                        // Calculate total absences and percentage
+                        const totalMeetings = meetings.length;
+                        const totalAbsent = dosenMeetings.filter((meeting) => !meeting.isPresent).length;
+                        const percentageAbsent = totalMeetings > 0 ? (totalAbsent / totalMeetings) * 100 : 0;
+
+                        return {
+                                id: dosen.id,
+                                nama: dosen.nama,
+                                email: dosen.email,
+                                nip: dosen.nip,
+                                bidangMinat: dosen.bidangMinat,
+                                userLevelId: dosen.userLevelId,
+                                type: "dosen",
+                                totalAbsent,
+                                percentageAbsent: Math.round(percentageAbsent * 100) / 100, // Round to 2 decimal places
+                                meetings: dosenMeetings,
+                        };
+                });
+
+                // Process mahasiswa with their meeting attendance
+                const mahasiswaWithMeetings = mahasiswaList.map((mahasiswa) => {
+                        const mahasiswaMeetings = meetings.map((meeting) => {
+                                // Find absensi record for this mahasiswa and meeting
+                                const absensi = absensiRecords.find((record) => record.mahasiswaId === mahasiswa.id && record.meetingId === meeting.id);
+
+                                return {
+                                        id: meeting.id,
+                                        pertemuan: meeting.pertemuan,
+                                        tanggal: meeting.tanggal,
+                                        isPresent: absensi ? absensi.isPresent : false,
+                                        keterangan: absensi ? absensi.keterangan : null,
+                                        waktuAbsen: absensi ? absensi.waktuAbsen : null,
+                                };
+                        });
+
+                        // Calculate total absences and percentage
+                        const totalMeetings = meetings.length;
+                        const totalAbsent = mahasiswaMeetings.filter((meeting) => !meeting.isPresent).length;
+                        const percentageAbsent = totalMeetings > 0 ? (totalAbsent / totalMeetings) * 100 : 0;
+
+                        return {
+                                id: mahasiswa.id,
+                                nama: mahasiswa.nama,
+                                npm: mahasiswa.npm,
+                                semester: mahasiswa.semester,
+                                tahunMasuk: mahasiswa.tahunMasuk,
+                                isActive: mahasiswa.isActive,
+                                userLevelId: mahasiswa.userLevelId,
+                                type: "mahasiswa",
+                                totalAbsent,
+                                percentageAbsent: Math.round(percentageAbsent * 100) / 100, // Round to 2 decimal places
+                                meetings: mahasiswaMeetings,
+                        };
+                });
+
+                // Combine dosen first, then mahasiswa
+                const participants = [...dosenWithMeetings, ...mahasiswaWithMeetings];
+
+                return {
+                        status: true,
+                        data: participants,
+                };
+        } catch (err) {
+                Logger.error(`MeetingService.getListParticipantsByJadwalId : ${err}`);
+                return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+        }
+}

@@ -10,9 +10,131 @@ import { getCurrentAcademicYear, isGanjilSemester } from "$utils/strings.utils";
 import { UserJWTDAO } from "$entities/User";
 import { ulid } from "ulid";
 
+/**
+ * Automatically assign students and dosen for practical courses from corresponding theory course
+ */
+async function assignStudentsAndDosenForPracticalCourse(matakuliahId: string, kelas?: string): Promise<{ mahasiswaIds: string[]; dosenIds: string[] }> {
+        try {
+                // Get practical course details
+                const praktikumMatakuliah = await prisma.matakuliah.findUnique({
+                        where: { id: matakuliahId },
+                });
+
+                if (!praktikumMatakuliah) return { mahasiswaIds: [], dosenIds: [] };
+
+                // Find corresponding theory course by removing "PRAKTIKUM" from name
+                const theoryCourseName = praktikumMatakuliah.nama.replace(/\s*PRAKTIKUM\s*/i, "").trim();
+                console.log(theoryCourseName);
+
+                const theoryMatakuliah = await prisma.matakuliah.findFirst({
+                        where: {
+                                nama: theoryCourseName,
+                                isTeori: true,
+                                semester: praktikumMatakuliah.semester,
+                        },
+                });
+
+                if (!theoryMatakuliah) {
+                        Logger.warn(`No corresponding theory course found for: ${praktikumMatakuliah.nama}`);
+                        return { mahasiswaIds: [], dosenIds: [] };
+                }
+
+                // Get current semester and year
+                const currentSemester = isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL;
+                const currentYear = getCurrentAcademicYear();
+
+                // Find students and dosen enrolled in the theory course for current semester
+                const theoryJadwal = await prisma.jadwal.findMany({
+                        where: {
+                                matakuliahId: theoryMatakuliah.id,
+                                semester: currentSemester,
+                                tahun: currentYear,
+                                deletedAt: null,
+                        },
+                        include: {
+                                mahasiswa: true,
+                                dosen: true,
+                        },
+                });
+
+                if (theoryJadwal.length === 0) {
+                        Logger.warn(`No theory course schedule found for: ${theoryMatakuliah.nama}`);
+                        return { mahasiswaIds: [], dosenIds: [] };
+                }
+
+                // Collect all students from theory course schedules
+                const theoryStudents = theoryJadwal.flatMap((jadwal) => jadwal.mahasiswa);
+
+                // Remove duplicates based on student ID
+                const uniqueStudents = theoryStudents.filter((student, index, self) => index === self.findIndex((s) => s.id === student.id));
+
+                // For practical courses, maximum 25 students per class
+                const maxStudentsPerClass = 25;
+                const shuffled = uniqueStudents.sort(() => 0.5 - Math.random());
+                const selectedStudents = shuffled.slice(0, maxStudentsPerClass);
+
+                // Collect all dosen from theory course schedules
+                const theoryDosen = theoryJadwal.flatMap((jadwal) => jadwal.dosen);
+
+                // Remove duplicates based on dosen ID
+                const uniqueDosen = theoryDosen.filter((dosen, index, self) => index === self.findIndex((d) => d.id === dosen.id));
+
+                Logger.info(
+                        `Assigned ${selectedStudents.length} students and ${uniqueDosen.length} dosen from theory course "${theoryMatakuliah.nama}" to practical course: ${
+                                praktikumMatakuliah.nama
+                        } ${kelas ? `- Kelas ${kelas}` : ""}`
+                );
+
+                return {
+                        mahasiswaIds: selectedStudents.map((s) => s.id),
+                        dosenIds: uniqueDosen.map((d) => d.id),
+                };
+        } catch (error) {
+                Logger.error(`Error assigning students and dosen for practical course: ${error}`);
+                return { mahasiswaIds: [], dosenIds: [] };
+        }
+}
+
 export type CreateResponse = Jadwal | {};
 export async function create(data: JadwalDTO): Promise<ServiceResponse<CreateResponse>> {
         try {
+                // Get matakuliah details to determine course type
+                const matakuliah = await prisma.matakuliah.findUnique({
+                        where: { id: data.matakuliahId },
+                });
+
+                if (!matakuliah) {
+                        return BadRequestWithMessage("Matakuliah tidak ditemukan!");
+                }
+
+                // Automatically assign students and dosen if not provided
+                let assignedMahasiswaIds = data.mahasiswaIds || [];
+                let assignedDosenIds = data.dosenIds || [];
+
+                if (assignedMahasiswaIds.length === 0) {
+                        // Determine if this is a theory or practical course
+                        const isTheoryCourse = matakuliah.isTeori === true;
+                        const isPracticalCourse = matakuliah.isTeori === false || matakuliah.nama.toUpperCase().includes("PRAKTIKUM");
+
+                        if (isTheoryCourse) {
+                                return BadRequestWithMessage("Tidak dapat membuat jadwal untuk mata kuliah teori!");
+                        }
+
+                        if (isPracticalCourse) {
+                                // Automatically assign students and dosen from corresponding theory course
+                                const practicalAssignment = await assignStudentsAndDosenForPracticalCourse(data.matakuliahId, data.kelas);
+                                assignedMahasiswaIds = practicalAssignment.mahasiswaIds;
+
+                                // Only auto-assign dosen if not provided
+                                if (assignedDosenIds.length === 0) {
+                                        assignedDosenIds = practicalAssignment.dosenIds;
+                                        Logger.info(`Auto-assigned ${assignedDosenIds.length} dosen from theory course for practical course: ${matakuliah.nama}`);
+                                }
+
+                                Logger.info(`Auto-assigned ${assignedMahasiswaIds.length} students for practical course: ${matakuliah.nama}`);
+                        }
+                }
+
                 const existingSchedules = await jadwalGeneticService.getExistingSchedules();
 
                 if (!existingSchedules) return BadRequestWithMessage("Tidak ada Jadwal yang ditemukan!");
@@ -22,11 +144,11 @@ export async function create(data: JadwalDTO): Promise<ServiceResponse<CreateRes
                         matakuliahId: data.matakuliahId,
                         ruanganId: data.ruanganId,
                         shiftId: data.shiftId,
-                        dosenIds: data.dosenIds,
+                        dosenIds: assignedDosenIds,
                         hari: data.hari,
-                        semester: isGanjilSemester() ? SEMESTER.GANJIL : SEMESTER.GENAP,
+                        semester: isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL,
                         tahun: getCurrentAcademicYear(),
-                        mahasiswaIds: data.mahasiswaIds || [],
+                        mahasiswaIds: assignedMahasiswaIds,
                         asistenLabIds: data.asistenLabIds || [],
                         fitness: 0,
                 };
@@ -49,13 +171,13 @@ export async function create(data: JadwalDTO): Promise<ServiceResponse<CreateRes
                 const jadwal = await prisma.jadwal.create({
                         data: {
                                 ...jadwalData,
-                                semester: isGanjilSemester() ? SEMESTER.GANJIL : SEMESTER.GENAP,
+                                semester: isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL,
                                 tahun: getCurrentAcademicYear(),
                                 dosen: {
-                                        connect: dosenIds.map((dosenId) => ({ id: dosenId })),
+                                        connect: assignedDosenIds.map((dosenId) => ({ id: dosenId })),
                                 },
                                 mahasiswa: {
-                                        connect: (mahasiswaIds || []).map((mahasiswaId) => ({ id: mahasiswaId })),
+                                        connect: assignedMahasiswaIds.map((mahasiswaId) => ({ id: mahasiswaId })),
                                 },
                                 asisten: {
                                         connect: (asistenLabIds || []).map((asistenId) => ({ id: asistenId })),
@@ -82,7 +204,7 @@ export async function create(data: JadwalDTO): Promise<ServiceResponse<CreateRes
 }
 
 export type GetAllResponse = PagedList<Jadwal[]> | {};
-export async function getAll(filters: FilteringQueryV2, type: string, user: UserJWTDAO): Promise<ServiceResponse<GetAllResponse>> {
+export async function getAll(filters: FilteringQueryV2, user: UserJWTDAO): Promise<ServiceResponse<GetAllResponse>> {
         try {
                 const usedFilters = buildFilterQueryLimitOffsetV2(filters);
 
@@ -110,6 +232,16 @@ export async function getAll(filters: FilteringQueryV2, type: string, user: User
                                         nama: true,
                                         kode: true,
                                         sks: true,
+                                },
+                        },
+                };
+
+                // Filter only for PRAKTIKUM courses
+                usedFilters.where = {
+                        ...usedFilters.where,
+                        matakuliah: {
+                                nama: {
+                                        contains: "PRAKTIKUM",
                                 },
                         },
                 };
@@ -247,114 +379,6 @@ export async function deleteByIds(ids: string): Promise<ServiceResponse<{}>> {
         }
 }
 
-/**
- * Checks for free schedule slots based on day, semester, and year
- *
- * @param day Optional day of week to check (SENIN, SELASA, etc.)
- * @param semester Optional semester to filter by
- * @param tahun Optional year to filter by
- * @returns Service response with free schedule slots and statistics
- */
-
-/**
- * Validates existing schedules against business rules
- * @returns Promise<ServiceResponse<any>> Response containing validation results
- */
-export async function validateExistingSchedules(): Promise<ServiceResponse<any>> {
-        try {
-                const existingSchedules = await prisma.jadwal.findMany({
-                        where: {
-                                semester: isGanjilSemester() ? SEMESTER.GANJIL : SEMESTER.GENAP,
-                                tahun: getCurrentAcademicYear(),
-                                deletedAt: null,
-                        },
-                        include: {
-                                matakuliah: true,
-                                dosen: true,
-                                mahasiswa: true,
-                                asisten: true,
-                                ruangan: true,
-                                shift: true,
-                        },
-                });
-
-                // Convert to Schedule format for validation
-                const scheduleData = existingSchedules.map((jadwal) => ({
-                        id: jadwal.id,
-                        matakuliahId: jadwal.matakuliahId,
-                        ruanganId: jadwal.ruanganId,
-                        shiftId: jadwal.shiftId,
-                        dosenIds: jadwal.dosen.map((d) => d.id),
-                        hari: jadwal.hari as any,
-                        semester: jadwal.semester,
-                        tahun: jadwal.tahun,
-                        mahasiswaIds: jadwal.mahasiswa.map((m) => m.id),
-                        asistenLabIds: jadwal.asisten.map((a) => a.id),
-                        fitness: 0,
-                }));
-
-                const validation = await jadwalGeneticService.validateScheduleSet(scheduleData);
-
-                // Additional analysis
-                const ruleViolations = {
-                        dosenFieldMismatch: 0,
-                        studentSemesterViolation: 0,
-                        roomConflicts: 0,
-                        dosenConflicts: 0,
-                        mahasiswaConflicts: 0,
-                        duplicateMatakuliah: 0,
-                };
-
-                // Analyze violations by type
-                validation.violations.forEach((violation) => {
-                        if (violation.includes("bidang minat mismatch")) {
-                                ruleViolations.dosenFieldMismatch++;
-                        } else if (violation.includes("semester restriction")) {
-                                ruleViolations.studentSemesterViolation++;
-                        } else if (violation.includes("Room conflict")) {
-                                ruleViolations.roomConflicts++;
-                        } else if (violation.includes("Dosen conflict")) {
-                                ruleViolations.dosenConflicts++;
-                        } else if (violation.includes("Mahasiswa conflict")) {
-                                ruleViolations.mahasiswaConflicts++;
-                        } else if (violation.includes("Duplicate matakuliah")) {
-                                ruleViolations.duplicateMatakuliah++;
-                        }
-                });
-
-                return {
-                        status: true,
-                        data: {
-                                totalSchedules: existingSchedules.length,
-                                validation: {
-                                        isValid: validation.isValid,
-                                        totalViolations: validation.violations.length,
-                                        violations: validation.violations,
-                                        violationsByType: ruleViolations,
-                                },
-                                scheduleDetails: existingSchedules.map((jadwal) => ({
-                                        id: jadwal.id,
-                                        matakuliah: jadwal.matakuliah.nama,
-                                        dosen: jadwal.dosen.map((d) => d.nama).join(", ") || "Not assigned",
-                                        mahasiswa: jadwal.mahasiswa.map((m) => m.nama).join(", ") || "Not assigned",
-                                        asisten: jadwal.asisten.map((a) => a.id).join(", ") || "Not assigned",
-                                        ruangan: jadwal.ruangan.nama,
-                                        shift: `${jadwal.shift.startTime} - ${jadwal.shift.endTime}`,
-                                        hari: jadwal.hari,
-                                        totalStudents: jadwal.mahasiswa.length,
-                                })),
-                        },
-                };
-        } catch (err) {
-                Logger.error(`JadwalService.validateExistingSchedules : ${err}`);
-                return {
-                        status: false,
-                        err: { message: (err as Error).message, code: 500 },
-                        data: null,
-                };
-        }
-}
-
 export async function getAvailableSchedule(filters: FilteringQueryV2, day?: string): Promise<ServiceResponse<any>> {
         try {
                 const usedFilters = buildFilterQueryLimitOffsetV2(filters);
@@ -379,7 +403,7 @@ export async function getAvailableSchedule(filters: FilteringQueryV2, day?: stri
                 const existingSchedules = await prisma.jadwal.findMany({
                         where: {
                                 hari: day,
-                                semester: isGanjilSemester() ? SEMESTER.GANJIL : SEMESTER.GENAP,
+                                semester: isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL,
                                 tahun: getCurrentAcademicYear(),
                                 deletedAt: null, // Only include non-deleted schedules
                         },
@@ -413,7 +437,7 @@ export async function getAvailableSchedule(filters: FilteringQueryV2, day?: stri
                 const dayStats: Record<HARI, any> = {} as Record<HARI, any>;
 
                 // Get current semester and year if not provided
-                const currentSemester = isGanjilSemester() ? SEMESTER.GANJIL : SEMESTER.GENAP;
+                const currentSemester = isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL;
                 const currentYear = new Date().getFullYear().toString();
 
                 for (const currentDay of daysToCheck) {
@@ -690,6 +714,8 @@ export type GetAllMatakuliahResponse = PagedList<Matakuliah[]> | {};
 export async function getAllMatakuliah(filters: FilteringQueryV2): Promise<ServiceResponse<GetAllMatakuliahResponse>> {
         try {
                 const usedFilters = buildFilterQueryLimitOffsetV2(filters);
+
+                usedFilters.where.isTeori = false;
 
                 const [matakuliah, totalData] = await Promise.all([
                         prisma.matakuliah.findMany(usedFilters),

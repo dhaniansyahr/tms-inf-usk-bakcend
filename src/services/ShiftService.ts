@@ -31,7 +31,12 @@ export async function getAll(filters: FilteringQueryV2): Promise<ServiceResponse
                 usedFilters.where.isActive = true;
 
                 const [shift, totalData] = await Promise.all([
-                        prisma.shift.findMany(usedFilters),
+                        prisma.shift.findMany({
+                                ...usedFilters,
+                                orderBy: {
+                                        startTime: "asc",
+                                },
+                        }),
                         prisma.shift.count({
                                 where: usedFilters.where,
                         }),

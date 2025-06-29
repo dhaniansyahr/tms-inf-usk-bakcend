@@ -1,7 +1,8 @@
 import { prisma } from "$utils/prisma.utils";
-import { isGanjilSemester } from "$utils/strings.utils";
+import { isGanjilSemester, getCurrentAcademicYear } from "$utils/strings.utils";
 import { SEMESTER, BIDANG_MINAT } from "@prisma/client";
 import { ulid } from "ulid";
+import Logger from "$pkg/logger";
 
 // Days of the week in Indonesian
 export type HARI = "SENIN" | "SELASA" | "RABU" | "KAMIS" | "JUMAT" | "SABTU";
@@ -18,7 +19,13 @@ interface Schedule {
         tahun: string;
         mahasiswaIds: string[];
         asistenLabIds: string[];
+        kelas?: string; // Class name (A, B, C, D)
         fitness: number;
+}
+
+interface ClassGroup {
+        kelas: string;
+        mahasiswa: any[];
 }
 
 interface GeneticAlgorithmConfig {
@@ -34,6 +41,68 @@ const DEFAULT_CONFIG: GeneticAlgorithmConfig = {
         mutationRate: 0.15,
         eliteSize: 15,
 };
+
+/**
+ * Divides students into classes with maximum 4 classes (A, B, C, D)
+ * @param students - Array of students to divide
+ * @param maxStudentsPerClass - Maximum students per class (50 for theory, 25 for practical)
+ * @returns Array of student groups with class names (max 4 classes)
+ */
+function divideStudentsIntoClasses(students: any[], maxStudentsPerClass: number): ClassGroup[] {
+        const maxClasses = 4; // Limit to 4 classes (A, B, C, D)
+        const classes: ClassGroup[] = [];
+        const classNames = ["A", "B", "C", "D"]; // Support up to 4 classes
+
+        // If we have very few students, just create one class
+        if (students.length <= maxStudentsPerClass) {
+                return [
+                        {
+                                kelas: "A",
+                                mahasiswa: students,
+                        },
+                ];
+        }
+
+        // Calculate how many classes we need
+        const requiredClasses = Math.min(Math.ceil(students.length / maxStudentsPerClass), maxClasses);
+
+        if (students.length <= maxStudentsPerClass * maxClasses) {
+                // Distribute students evenly across required classes
+                const studentsPerClass = Math.ceil(students.length / requiredClasses);
+
+                for (let i = 0; i < requiredClasses; i++) {
+                        const startIndex = i * studentsPerClass;
+                        const endIndex = Math.min(startIndex + studentsPerClass, students.length);
+                        const studentsInClass = students.slice(startIndex, endIndex);
+
+                        if (studentsInClass.length > 0) {
+                                classes.push({
+                                        kelas: classNames[i],
+                                        mahasiswa: studentsInClass,
+                                });
+                        }
+                }
+        } else {
+                // If we have more students than 4 classes can handle, limit to first students
+                const maxTotalStudents = maxStudentsPerClass * maxClasses;
+                console.log(`⚠️  Course has ${students.length} eligible students, limiting to first ${maxTotalStudents} students (${maxClasses} classes)`);
+
+                for (let i = 0; i < maxClasses; i++) {
+                        const startIndex = i * maxStudentsPerClass;
+                        const endIndex = startIndex + maxStudentsPerClass;
+                        const studentsInClass = students.slice(startIndex, endIndex);
+
+                        if (studentsInClass.length > 0) {
+                                classes.push({
+                                        kelas: classNames[i],
+                                        mahasiswa: studentsInClass,
+                                });
+                        }
+                }
+        }
+
+        return classes;
+}
 
 /**
  * Checks if a student can enroll in a course based on semester rules
@@ -143,7 +212,7 @@ function getCurrentSemesterAndYear(): { semester: SEMESTER; tahun: string } {
 
         // Determine semester based on month
         // Assume: January-June is GENAP, July-December is GANJIL
-        const semester = isGanjilSemester() ? SEMESTER.GANJIL : SEMESTER.GENAP;
+        const semester = isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL;
 
         // Get the academic year
         const year = now.getFullYear();
@@ -208,42 +277,196 @@ function selectValidMahasiswaForMatakuliah(matakuliah: any, allMahasiswa: any[],
 }
 
 /**
- * Creates a random schedule with enhanced validation for rules
+ * Automatically assign students for theory courses with class division
+ */
+async function assignStudentsForTheoryCourse(matakuliahId: string, allMahasiswa: any[]): Promise<ClassGroup[]> {
+        try {
+                // Get course details
+                const matakuliah = await prisma.matakuliah.findUnique({
+                        where: { id: matakuliahId },
+                });
+
+                if (!matakuliah) return [];
+
+                // Filter students based on semester eligibility
+                const eligibleStudents = allMahasiswa.filter((mahasiswa) => canStudentTakeCourse(mahasiswa.semester, matakuliah.semester));
+
+                // For theory courses, max 50 students per class
+                const maxStudentsPerClass = 50;
+                const shuffled = eligibleStudents.sort(() => 0.5 - Math.random());
+
+                // Divide students into classes
+                const classes = divideStudentsIntoClasses(shuffled, maxStudentsPerClass);
+
+                Logger.info(`Auto-assigned ${shuffled.length} students to theory course: ${matakuliah.nama} (${classes.length} classes)`);
+
+                return classes;
+        } catch (error) {
+                Logger.error(`Error assigning students for theory course: ${error}`);
+                return [];
+        }
+}
+
+/**
+ * Automatically assign students and dosen for practical courses from corresponding theory course with class division
+ */
+async function assignStudentsAndDosenForPracticalCourse(matakuliahId: string): Promise<{ classes: ClassGroup[]; dosenIds: string[] }> {
+        try {
+                // Get practical course details
+                const praktikumMatakuliah = await prisma.matakuliah.findUnique({
+                        where: { id: matakuliahId },
+                });
+
+                if (!praktikumMatakuliah) return { classes: [], dosenIds: [] };
+
+                // Find corresponding theory course by removing "PRAKTIKUM" from name
+                const theoryCourseName = praktikumMatakuliah.nama.replace(/\s*PRAKTIKUM\s*/i, "").trim();
+
+                const theoryMatakuliah = await prisma.matakuliah.findFirst({
+                        where: {
+                                nama: theoryCourseName,
+                                isTeori: true,
+                                semester: praktikumMatakuliah.semester,
+                        },
+                });
+
+                if (!theoryMatakuliah) {
+                        Logger.warn(`No corresponding theory course found for: ${praktikumMatakuliah.nama}`);
+                        return { classes: [], dosenIds: [] };
+                }
+
+                // Get current semester and year
+                const currentSemester = isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL;
+                const currentYear = getCurrentAcademicYear();
+
+                // Find students and dosen enrolled in the theory course for current semester
+                const theoryJadwal = await prisma.jadwal.findMany({
+                        where: {
+                                matakuliahId: theoryMatakuliah.id,
+                                semester: currentSemester,
+                                tahun: currentYear,
+                                deletedAt: null,
+                        },
+                        include: {
+                                mahasiswa: true,
+                                dosen: true,
+                        },
+                });
+
+                if (theoryJadwal.length === 0) {
+                        Logger.warn(`No theory course schedule found for: ${theoryMatakuliah.nama}`);
+                        return { classes: [], dosenIds: [] };
+                }
+
+                // Collect all students from theory course schedules
+                const theoryStudents = theoryJadwal.flatMap((jadwal) => jadwal.mahasiswa);
+
+                // Remove duplicates based on student ID
+                const uniqueStudents = theoryStudents.filter((student, index, self) => index === self.findIndex((s) => s.id === student.id));
+
+                // For practical courses, maximum 25 students per class
+                const maxStudentsPerClass = 25;
+                const shuffled = uniqueStudents.sort(() => 0.5 - Math.random());
+
+                // Divide students into classes
+                const classes = divideStudentsIntoClasses(shuffled, maxStudentsPerClass);
+
+                // Collect all dosen from theory course schedules
+                const theoryDosen = theoryJadwal.flatMap((jadwal) => jadwal.dosen);
+
+                // Remove duplicates based on dosen ID
+                const uniqueDosen = theoryDosen.filter((dosen, index, self) => index === self.findIndex((d) => d.id === dosen.id));
+
+                Logger.info(
+                        `Auto-assigned ${shuffled.length} students and ${uniqueDosen.length} dosen from theory course "${theoryMatakuliah.nama}" to practical course: ${praktikumMatakuliah.nama} (${classes.length} classes)`
+                );
+
+                return {
+                        classes,
+                        dosenIds: uniqueDosen.map((d) => d.id),
+                };
+        } catch (error) {
+                Logger.error(`Error assigning students and dosen for practical course: ${error}`);
+                return { classes: [], dosenIds: [] };
+        }
+}
+
+/**
+ * Creates a random schedule with enhanced validation for rules and automatic assignment
  * @param matakuliah - Array of available matakuliah
  * @param ruangan - Array of available ruangan
  * @param shift - Array of available shifts
  * @param dosen - Array of available dosen
  * @param mahasiswa - Array of available mahasiswa
- * @returns Schedule A randomly generated schedule
+ * @returns Promise<Schedule> A randomly generated schedule (single class for genetic algorithm)
  */
-function createRandomSchedule(matakuliah: any[], ruangan: any[], shift: any[], dosen: any[], mahasiswa: any[]): Schedule {
+async function createRandomSchedule(matakuliah: any[], ruangan: any[], shift: any[], dosen: any[], mahasiswa: any[]): Promise<Schedule> {
         const randomMatakuliah = matakuliah[Math.floor(Math.random() * matakuliah.length)];
         const randomRuangan = ruangan[Math.floor(Math.random() * ruangan.length)];
         const randomShift = shift[Math.floor(Math.random() * shift.length)];
         const randomHari = HARI_LIST[Math.floor(Math.random() * HARI_LIST.length)];
 
-        // Select valid dosen based on field of interest rules
-        const validDosen = selectValidDosenForMatakuliah(randomMatakuliah, dosen);
-        if (!validDosen) {
-                throw new Error(`No valid dosen found for matakuliah ${randomMatakuliah.nama} with bidang minat ${randomMatakuliah.bidangMinat}`);
+        // Determine course type and automatically assign students and dosen
+        const isTheoryCourse = randomMatakuliah.isTeori === true;
+        const isPracticalCourse = randomMatakuliah.isTeori === false || randomMatakuliah.nama.toUpperCase().includes("PRAKTIKUM");
+
+        let assignedDosenIds: string[] = [];
+        let assignedClasses: ClassGroup[] = [];
+
+        if (isTheoryCourse) {
+                // For theory courses: use compatible dosen + auto-assign students
+                const validDosen = selectValidDosenForMatakuliah(randomMatakuliah, dosen);
+                if (!validDosen) {
+                        throw new Error(`No valid dosen found for matakuliah ${randomMatakuliah.nama} with bidang minat ${randomMatakuliah.bidangMinat}`);
+                }
+                assignedDosenIds = [validDosen.id];
+                assignedClasses = await assignStudentsForTheoryCourse(randomMatakuliah.id, mahasiswa);
+        } else if (isPracticalCourse) {
+                // For practical courses: auto-assign from theory course
+                const practicalAssignment = await assignStudentsAndDosenForPracticalCourse(randomMatakuliah.id);
+                assignedDosenIds = practicalAssignment.dosenIds;
+                assignedClasses = practicalAssignment.classes;
+
+                // Fallback to compatible dosen if no theory course found
+                if (assignedDosenIds.length === 0) {
+                        const validDosen = selectValidDosenForMatakuliah(randomMatakuliah, dosen);
+                        if (validDosen) {
+                                assignedDosenIds = [validDosen.id];
+                                Logger.warn(`Using fallback dosen assignment for practical course: ${randomMatakuliah.nama}`);
+                        }
+                }
+        } else {
+                // Fallback: treat as theory course
+                const validDosen = selectValidDosenForMatakuliah(randomMatakuliah, dosen);
+                if (!validDosen) {
+                        throw new Error(`No valid dosen found for matakuliah ${randomMatakuliah.nama} with bidang minat ${randomMatakuliah.bidangMinat}`);
+                }
+                assignedDosenIds = [validDosen.id];
+                assignedClasses = await assignStudentsForTheoryCourse(randomMatakuliah.id, mahasiswa);
         }
 
-        // Select valid mahasiswa based on semester rules
-        const validMahasiswa = selectValidMahasiswaForMatakuliah(randomMatakuliah, mahasiswa);
+        if (assignedDosenIds.length === 0) {
+                throw new Error(`No dosen assigned for matakuliah ${randomMatakuliah.nama}`);
+        }
 
         const { semester, tahun } = getCurrentSemesterAndYear();
+
+        // For genetic algorithm, pick one random class to create a single schedule
+        // Multiple schedules for the same matakuliah will be handled by generateAllSchedulesForMatakuliah
+        const randomClass = assignedClasses.length > 0 ? assignedClasses[Math.floor(Math.random() * assignedClasses.length)] : { kelas: "A", mahasiswa: [] };
 
         return {
                 id: ulid(),
                 matakuliahId: randomMatakuliah.id,
                 ruanganId: randomRuangan.id,
                 shiftId: randomShift.id,
-                dosenIds: [validDosen.id],
+                dosenIds: assignedDosenIds,
                 hari: randomHari,
                 semester,
                 tahun,
-                mahasiswaIds: validMahasiswa.map((m) => m.id),
+                mahasiswaIds: randomClass.mahasiswa.map((m) => m.id),
                 asistenLabIds: [], // Can be populated later if needed
+                kelas: randomClass.kelas,
                 fitness: 0,
         };
 }
@@ -319,15 +542,15 @@ function calculateFitness(schedule: Schedule, allSchedules: Schedule[], matakuli
 }
 
 /**
- * Enhanced crossover with rule-aware offspring generation
+ * Enhanced crossover with rule-aware offspring generation and automatic assignment
  * @param parent1 - First parent schedule
  * @param parent2 - Second parent schedule
  * @param matakuliah - Array of matakuliah for validation
  * @param dosen - Array of dosen for validation
  * @param mahasiswa - Array of mahasiswa for validation
- * @returns Schedule A new schedule created from the parents
+ * @returns Promise<Schedule> New schedule created from the parents (single class for genetic algorithm)
  */
-function crossover(parent1: Schedule, parent2: Schedule, matakuliah: any[], dosen: any[], mahasiswa: any[]): Schedule {
+async function crossover(parent1: Schedule, parent2: Schedule, matakuliah: any[], dosen: any[], mahasiswa: any[]): Promise<Schedule> {
         const { semester, tahun } = getCurrentSemesterAndYear();
 
         // Select matakuliah from one of the parents
@@ -338,26 +561,63 @@ function crossover(parent1: Schedule, parent2: Schedule, matakuliah: any[], dose
                 throw new Error(`Matakuliah not found: ${selectedMatakuliahId}`);
         }
 
-        // Ensure valid dosen for the selected matakuliah
-        const validDosen = selectValidDosenForMatakuliah(selectedMatakuliah, dosen);
-        if (!validDosen) {
-                throw new Error(`No valid dosen found for matakuliah ${selectedMatakuliah.nama}`);
+        // Determine course type and automatically assign students and dosen
+        const isTheoryCourse = selectedMatakuliah.isTeori === true;
+        const isPracticalCourse = selectedMatakuliah.isTeori === false || selectedMatakuliah.nama.toUpperCase().includes("PRAKTIKUM");
+
+        let assignedDosenIds: string[] = [];
+        let assignedClasses: ClassGroup[] = [];
+
+        if (isTheoryCourse) {
+                // For theory courses: use compatible dosen + auto-assign students
+                const validDosen = selectValidDosenForMatakuliah(selectedMatakuliah, dosen);
+                if (!validDosen) {
+                        throw new Error(`No valid dosen found for matakuliah ${selectedMatakuliah.nama}`);
+                }
+                assignedDosenIds = [validDosen.id];
+                assignedClasses = await assignStudentsForTheoryCourse(selectedMatakuliah.id, mahasiswa);
+        } else if (isPracticalCourse) {
+                // For practical courses: auto-assign from theory course
+                const practicalAssignment = await assignStudentsAndDosenForPracticalCourse(selectedMatakuliah.id);
+                assignedDosenIds = practicalAssignment.dosenIds;
+                assignedClasses = practicalAssignment.classes;
+
+                // Fallback to compatible dosen if no theory course found
+                if (assignedDosenIds.length === 0) {
+                        const validDosen = selectValidDosenForMatakuliah(selectedMatakuliah, dosen);
+                        if (validDosen) {
+                                assignedDosenIds = [validDosen.id];
+                        }
+                }
+        } else {
+                // Fallback: treat as theory course
+                const validDosen = selectValidDosenForMatakuliah(selectedMatakuliah, dosen);
+                if (!validDosen) {
+                        throw new Error(`No valid dosen found for matakuliah ${selectedMatakuliah.nama}`);
+                }
+                assignedDosenIds = [validDosen.id];
+                assignedClasses = await assignStudentsForTheoryCourse(selectedMatakuliah.id, mahasiswa);
         }
 
-        // Ensure valid mahasiswa for the selected matakuliah
-        const validMahasiswa = selectValidMahasiswaForMatakuliah(selectedMatakuliah, mahasiswa);
+        if (assignedDosenIds.length === 0) {
+                throw new Error(`No dosen assigned for matakuliah ${selectedMatakuliah.nama}`);
+        }
+
+        // For genetic algorithm, pick one random class to create a single schedule
+        const randomClass = assignedClasses.length > 0 ? assignedClasses[Math.floor(Math.random() * assignedClasses.length)] : { kelas: "A", mahasiswa: [] };
 
         return {
                 id: ulid(),
                 matakuliahId: selectedMatakuliahId,
                 ruanganId: Math.random() < 0.5 ? parent1.ruanganId : parent2.ruanganId,
                 shiftId: Math.random() < 0.5 ? parent1.shiftId : parent2.shiftId,
-                dosenIds: [validDosen.id],
+                dosenIds: assignedDosenIds,
                 hari: Math.random() < 0.5 ? parent1.hari : parent2.hari,
                 semester,
                 tahun,
-                mahasiswaIds: validMahasiswa.map((m) => m.id),
+                mahasiswaIds: randomClass.mahasiswa.map((m) => m.id),
                 asistenLabIds: [],
+                kelas: randomClass.kelas,
                 fitness: 0,
         };
 }
@@ -589,7 +849,7 @@ async function generateMeetingDates(jadwalId: string, numberOfMeetings: number =
  */
 async function saveSchedule(schedule: Schedule): Promise<any> {
         // Extract just the fields needed for saving to the database
-        const { id, matakuliahId, ruanganId, shiftId, dosenIds, hari, semester, tahun, asistenLabIds, mahasiswaIds } = schedule;
+        const { id, matakuliahId, ruanganId, shiftId, dosenIds, hari, semester, tahun, asistenLabIds, mahasiswaIds, kelas } = schedule;
 
         // Create the jadwal record
         const jadwal = await prisma.jadwal.create({
@@ -601,6 +861,7 @@ async function saveSchedule(schedule: Schedule): Promise<any> {
                         hari,
                         semester,
                         tahun,
+                        kelas,
                         dosen: {
                                 connect: dosenIds.map((dosenId) => ({ id: dosenId })),
                         },
@@ -637,31 +898,70 @@ async function saveSchedule(schedule: Schedule): Promise<any> {
 }
 
 /**
- * Creates a deterministic schedule for a specific matakuliah
+ * Creates a deterministic schedule for a specific matakuliah with automatic assignment
  * @param matakuliah - The specific matakuliah to schedule
  * @param ruangan - Array of available ruangan
  * @param shift - Array of available shifts
  * @param dosen - Array of available dosen
  * @param mahasiswa - Array of available mahasiswa
  * @param preferredDay - Optional preferred day
- * @returns Schedule A schedule for the specific matakuliah
+ * @returns Promise<Schedule> A schedule for the specific matakuliah
  */
-function createScheduleForMatakuliah(matakuliah: any, ruangan: any[], shift: any[], dosen: any[], mahasiswa: any[], preferredDay?: HARI): Schedule {
+async function createScheduleForMatakuliah(matakuliah: any, ruangan: any[], shift: any[], dosen: any[], mahasiswa: any[], preferredDay?: HARI): Promise<Schedule> {
         const randomRuangan = ruangan[Math.floor(Math.random() * ruangan.length)];
         const randomShift = shift[Math.floor(Math.random() * shift.length)];
         const randomHari = preferredDay || HARI_LIST[Math.floor(Math.random() * HARI_LIST.length)];
 
-        // Select valid dosen based on field of interest rules
-        const validDosen = selectValidDosenForMatakuliah(matakuliah, dosen);
-        if (!validDosen) {
-                throw new Error(`No valid dosen found for matakuliah ${matakuliah.nama} with bidang minat ${matakuliah.bidangMinat}`);
+        // Determine course type and automatically assign students and dosen
+        const isTheoryCourse = matakuliah.isTeori === true;
+        const isPracticalCourse = matakuliah.isTeori === false || matakuliah.nama.toUpperCase().includes("PRAKTIKUM");
+
+        let assignedDosenIds: string[] = [];
+        let assignedMahasiswaIds: string[] = [];
+        let firstClass: { kelas: string; mahasiswa: any[] } = { kelas: "A", mahasiswa: [] };
+
+        if (isTheoryCourse) {
+                // For theory courses: use compatible dosen + auto-assign students
+                const validDosen = selectValidDosenForMatakuliah(matakuliah, dosen);
+                if (!validDosen) {
+                        throw new Error(`No valid dosen found for matakuliah ${matakuliah.nama} with bidang minat ${matakuliah.bidangMinat}`);
+                }
+                assignedDosenIds = [validDosen.id];
+                const classes = await assignStudentsForTheoryCourse(matakuliah.id, mahasiswa);
+                // Pick first class for single schedule generation
+                firstClass = classes.length > 0 ? classes[0] : { kelas: "A", mahasiswa: [] };
+                assignedMahasiswaIds = firstClass.mahasiswa.map((m) => m.id);
+        } else if (isPracticalCourse) {
+                // For practical courses: auto-assign from theory course
+                const practicalAssignment = await assignStudentsAndDosenForPracticalCourse(matakuliah.id);
+                assignedDosenIds = practicalAssignment.dosenIds;
+                // Pick first class for single schedule generation
+                firstClass = practicalAssignment.classes.length > 0 ? practicalAssignment.classes[0] : { kelas: "A", mahasiswa: [] };
+                assignedMahasiswaIds = firstClass.mahasiswa.map((m) => m.id);
+
+                // Fallback to compatible dosen if no theory course found
+                if (assignedDosenIds.length === 0) {
+                        const validDosen = selectValidDosenForMatakuliah(matakuliah, dosen);
+                        if (validDosen) {
+                                assignedDosenIds = [validDosen.id];
+                                Logger.warn(`Using fallback dosen assignment for practical course: ${matakuliah.nama}`);
+                        }
+                }
+        } else {
+                // Fallback: treat as theory course
+                const validDosen = selectValidDosenForMatakuliah(matakuliah, dosen);
+                if (!validDosen) {
+                        throw new Error(`No valid dosen found for matakuliah ${matakuliah.nama} with bidang minat ${matakuliah.bidangMinat}`);
+                }
+                assignedDosenIds = [validDosen.id];
+                const classes = await assignStudentsForTheoryCourse(matakuliah.id, mahasiswa);
+                // Pick first class for single schedule generation
+                firstClass = classes.length > 0 ? classes[0] : { kelas: "A", mahasiswa: [] };
+                assignedMahasiswaIds = firstClass.mahasiswa.map((m) => m.id);
         }
 
-        // Select valid mahasiswa based on semester rules (30% chance to assign)
-        const assignMahasiswa = Math.random() < 0.3;
-        let validMahasiswa = null;
-        if (assignMahasiswa) {
-                validMahasiswa = selectValidMahasiswaForMatakuliah(matakuliah, mahasiswa);
+        if (assignedDosenIds.length === 0) {
+                throw new Error(`No dosen assigned for matakuliah ${matakuliah.nama}`);
         }
 
         const { semester, tahun } = getCurrentSemesterAndYear();
@@ -671,12 +971,13 @@ function createScheduleForMatakuliah(matakuliah: any, ruangan: any[], shift: any
                 matakuliahId: matakuliah.id,
                 ruanganId: randomRuangan.id,
                 shiftId: randomShift.id,
-                dosenIds: [validDosen.id],
+                dosenIds: assignedDosenIds,
                 hari: randomHari,
                 semester,
                 tahun,
-                mahasiswaIds: validMahasiswa ? validMahasiswa.map((m) => m.id) : [],
+                mahasiswaIds: assignedMahasiswaIds,
                 asistenLabIds: [],
+                kelas: firstClass.kelas,
                 fitness: 0,
         };
 }
@@ -784,7 +1085,7 @@ async function generateOptimizedSchedule(preferredDay?: HARI, maxSchedules: numb
                 while (population.length < targetPopulationSize && attempts < maxAttempts) {
                         attempts++;
                         try {
-                                const schedule = createRandomSchedule(availableMatakuliah, ruangan, shift, dosen, mahasiswa);
+                                const schedule = await createRandomSchedule(availableMatakuliah, ruangan, shift, dosen, mahasiswa);
 
                                 if (preferredDay) {
                                         schedule.hari = preferredDay;
@@ -868,7 +1169,7 @@ async function generateOptimizedSchedule(preferredDay?: HARI, maxSchedules: numb
                                 const parent2 = tournamentSelection(population, 5);
 
                                 try {
-                                        let child = crossover(parent1, parent2, matakuliah, dosen, mahasiswa);
+                                        let child = await crossover(parent1, parent2, matakuliah, dosen, mahasiswa);
                                         child = mutate(child, availableMatakuliah, ruangan, shift, dosen, mahasiswa, config.mutationRate);
 
                                         if (preferredDay) {
@@ -1223,7 +1524,7 @@ async function generateSchedulesForAllAvailableMatakuliah(preferredDay?: HARI): 
                         while (!scheduleCreated && attempts < maxAttempts) {
                                 attempts++;
                                 try {
-                                        const schedule = createScheduleForMatakuliah(mk, ruangan, shift, dosen, mahasiswa, preferredDay);
+                                        const schedule = await createScheduleForMatakuliah(mk, ruangan, shift, dosen, mahasiswa, preferredDay);
 
                                         // Check if this schedule conflicts with existing schedules or already generated schedules
                                         const allExistingSchedules = [...existingSchedules, ...schedules];
@@ -1269,14 +1570,123 @@ async function generateSchedulesForAllAvailableMatakuliah(preferredDay?: HARI): 
         }
 }
 
+/**
+ * Expands a single schedule into multiple schedules based on class groups
+ * @param schedule - The base schedule to expand
+ * @param classes - Array of class groups to create schedules for
+ * @returns Array of schedules, one for each class
+ */
+function expandScheduleIntoClasses(schedule: Schedule, classes: ClassGroup[]): Schedule[] {
+        const expandedSchedules: Schedule[] = [];
+
+        for (const classGroup of classes) {
+                expandedSchedules.push({
+                        ...schedule,
+                        id: ulid(), // Generate new ID for each class
+                        mahasiswaIds: classGroup.mahasiswa.map((m) => m.id),
+                        kelas: classGroup.kelas,
+                });
+        }
+
+        return expandedSchedules;
+}
+
+/**
+ * Saves multiple schedules with proper class handling and meeting generation
+ * @param schedules - Array of schedules to save
+ * @returns Promise<any[]> Array of saved schedule records
+ */
+async function saveSchedulesWithClasses(schedules: Schedule[]): Promise<any[]> {
+        const savedSchedules = [];
+
+        for (const schedule of schedules) {
+                // Save the schedule
+                const savedSchedule = await saveSchedule(schedule);
+                savedSchedules.push(savedSchedule);
+        }
+
+        return savedSchedules;
+}
+
+/**
+ * Generates all necessary class schedules for a specific matakuliah
+ * @param matakuliahId - ID of the matakuliah to create schedules for
+ * @param ruanganId - ID of the room to use
+ * @param shiftId - ID of the shift to use
+ * @param hari - Day of the week
+ * @param dosenIds - Array of dosen IDs to assign
+ * @returns Promise<Schedule[]> Array of schedules for each class needed
+ */
+async function generateAllSchedulesForMatakuliah(matakuliahId: string, ruanganId: string, shiftId: string, hari: HARI, dosenIds: string[]): Promise<Schedule[]> {
+        try {
+                // Get course details
+                const matakuliah = await prisma.matakuliah.findUnique({
+                        where: { id: matakuliahId },
+                });
+
+                if (!matakuliah) {
+                        throw new Error(`Matakuliah not found: ${matakuliahId}`);
+                }
+
+                // Get all mahasiswa for assignment
+                const allMahasiswa = await prisma.mahasiswa.findMany({
+                        where: { isActive: true },
+                });
+
+                const { semester, tahun } = getCurrentSemesterAndYear();
+
+                // Determine course type and get appropriate class groups
+                const isTheoryCourse = matakuliah.isTeori === true;
+                const isPracticalCourse = matakuliah.isTeori === false || matakuliah.nama.toUpperCase().includes("PRAKTIKUM");
+
+                let classes: ClassGroup[] = [];
+
+                if (isTheoryCourse) {
+                        classes = await assignStudentsForTheoryCourse(matakuliahId, allMahasiswa);
+                } else if (isPracticalCourse) {
+                        const practicalAssignment = await assignStudentsAndDosenForPracticalCourse(matakuliahId);
+                        classes = practicalAssignment.classes;
+                        // Update dosen IDs if we got them from theory course
+                        if (practicalAssignment.dosenIds.length > 0) {
+                                dosenIds = practicalAssignment.dosenIds;
+                        }
+                }
+
+                // Create one schedule for each class
+                const schedules: Schedule[] = [];
+                for (const classGroup of classes) {
+                        schedules.push({
+                                id: ulid(),
+                                matakuliahId,
+                                ruanganId,
+                                shiftId,
+                                dosenIds,
+                                hari,
+                                semester,
+                                tahun,
+                                mahasiswaIds: classGroup.mahasiswa.map((m) => m.id),
+                                asistenLabIds: [],
+                                kelas: classGroup.kelas,
+                                fitness: 0,
+                        });
+                }
+
+                return schedules;
+        } catch (error) {
+                Logger.error(`Error generating schedules for matakuliah ${matakuliahId}:`, error);
+                throw error;
+        }
+}
+
 // Export the enhanced service
 export const jadwalGeneticService = {
         generateSchedule: generateOptimizedSchedule,
         generateScheduleWithValidation: generateOptimizedSchedule,
         generateOptimizedSchedule,
-        generateSchedulesForAllAvailableMatakuliah,
         saveSchedule,
         generateMeetingDates,
+
+        generateSchedulesForAllAvailableMatakuliah,
         getExistingSchedules,
         hasScheduleConflicts,
         validateScheduleSet,
@@ -1284,4 +1694,7 @@ export const jadwalGeneticService = {
         canDosenTeachCourse,
         diagnoseSchedulingConstraints,
         generateRecommendations,
+        expandScheduleIntoClasses,
+        saveSchedulesWithClasses,
+        generateAllSchedulesForMatakuliah,
 };

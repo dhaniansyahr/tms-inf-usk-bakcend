@@ -10,6 +10,7 @@ interface MataKuliahExcel {
         SKS: number;
         BIDANG_MINAT: string;
         SEMESTER: number;
+        IS_TEORI: string;
 }
 
 function readExcelFile(filePath: string): MataKuliahExcel[] {
@@ -35,6 +36,8 @@ export async function seedMataKuliah(prisma: PrismaClient) {
                 console.log(`Found ${matakuliahData.length} matakuliah in Excel`);
 
                 for (const data of matakuliahData) {
+                        const isTeori = data.IS_TEORI === "TEORI" ? true : false;
+
                         await prisma.matakuliah.create({
                                 data: {
                                         id: ulid(),
@@ -44,6 +47,7 @@ export async function seedMataKuliah(prisma: PrismaClient) {
                                         sks: data.SKS,
                                         bidangMinat: data.BIDANG_MINAT as BIDANG_MINAT,
                                         semester: data.SEMESTER,
+                                        isTeori: isTeori,
                                 },
                         });
 

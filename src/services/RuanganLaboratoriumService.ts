@@ -29,6 +29,11 @@ export async function getAll(filters: FilteringQueryV2): Promise<ServiceResponse
         try {
                 const usedFilters = buildFilterQueryLimitOffsetV2(filters);
 
+                usedFilters.where.isActive = true;
+                usedFilters.where.nama = {
+                        contains: "Lab",
+                };
+
                 const [ruanganLaboratorium, totalData] = await Promise.all([
                         prisma.ruanganLaboratorium.findMany(usedFilters),
                         prisma.ruanganLaboratorium.count({

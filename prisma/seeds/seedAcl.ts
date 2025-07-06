@@ -70,7 +70,7 @@ export async function seedAcl(prisma: PrismaClient) {
                     select: { name: true, namaFeature: true },
                 }),
                 prisma.user.findUnique({
-                    where: { email: "superadmin@test.com" },
+                    where: { email: "superadmin@usk.ac.id" },
                     select: { id: true, userLevelId: true },
                 }),
             ]);

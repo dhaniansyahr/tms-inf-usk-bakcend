@@ -1,206 +1,269 @@
 import jwt from "jsonwebtoken";
 import { User } from "@prisma/client";
-import { exclude, UserRegisterDTO, UserLoginDTO, UserJWTDAO } from "$entities/User";
-import { BadRequestWithMessage, INTERNAL_SERVER_ERROR_SERVICE_RESPONSE, ServiceResponse } from "$entities/Service";
+import {
+    exclude,
+    UserRegisterDTO,
+    UserLoginDTO,
+    UserJWTDAO,
+} from "$entities/User";
+import {
+    BadRequestWithMessage,
+    INTERNAL_SERVER_ERROR_SERVICE_RESPONSE,
+    ServiceResponse,
+} from "$entities/Service";
 import { prisma } from "$utils/prisma.utils";
 import Logger from "$pkg/logger";
 import bcrypt from "bcrypt";
 import { getIdentityType } from "$utils/strings.utils";
 
 function createToken(user: User, expiresIn: number = 3600) {
-        const jwtPayload = exclude(user, "password") as unknown as UserJWTDAO;
-        const token = jwt.sign(jwtPayload, process.env.JWT_SECRET ?? "", { expiresIn });
-        return token;
+    const jwtPayload = exclude(user, "password") as unknown as UserJWTDAO;
+    const token = jwt.sign(jwtPayload, process.env.JWT_SECRET ?? "", {
+        expiresIn,
+    });
+    return token;
 }
 
 export async function logIn(data: UserLoginDTO): Promise<ServiceResponse<any>> {
-        try {
-                const { identity } = data;
+    try {
+        const { identity } = data;
 
-                const checkIdentity = getIdentityType(identity);
+        const checkIdentity = getIdentityType(identity);
 
-                if (checkIdentity === "NPM") {
-                        return loginMahasiswa(data);
-                } else if (checkIdentity === "NIP") {
-                        return loginDosen(data);
-                } else if (checkIdentity === "EMAIL") {
-                        return loginWithEmail(data);
-                }
-
-                return BadRequestWithMessage("Pastikan identitas yang anda masukkan benar. Identitas harus berupa email atau 13 digit NPM atau 16 digit NIP.");
-        } catch (err) {
-                Logger.error(`AuthService.login : ${err}`);
-                return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+        if (checkIdentity === "NPM") {
+            return loginMahasiswa(data);
+        } else if (checkIdentity === "NIP") {
+            return loginDosen(data);
+        } else if (checkIdentity === "EMAIL") {
+            return loginWithEmail(data);
         }
+
+        return BadRequestWithMessage(
+            "Pastikan identitas yang anda masukkan benar. Identitas harus berupa email atau 13 digit NPM atau 16 digit NIP."
+        );
+    } catch (err) {
+        Logger.error(`AuthService.login : ${err}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
 }
 
-export async function loginMahasiswa(data: UserLoginDTO): Promise<ServiceResponse<any>> {
-        try {
-                const { identity, password } = data;
+export async function loginMahasiswa(
+    data: UserLoginDTO
+): Promise<ServiceResponse<any>> {
+    try {
+        const { identity, password } = data;
 
-                const mahasiswa: any = await prisma.mahasiswa.findUnique({
-                        where: {
-                                npm: identity,
-                        },
-                });
+        const mahasiswa: any = await prisma.mahasiswa.findUnique({
+            where: {
+                npm: identity,
+            },
+            include: {
+                userLevel: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+            },
+        });
 
-                const isPasswordVerified = await bcrypt.compareSync(password, mahasiswa?.password);
+        const isPasswordVerified = await bcrypt.compareSync(
+            password,
+            mahasiswa?.password
+        );
 
-                if (mahasiswa && isPasswordVerified) {
-                        const token = createToken(mahasiswa, 60 * 60 * 24);
-                        const refreshToken = createToken(mahasiswa, 60 * 60 * 24 * 3);
-                        return { status: true, data: { user: exclude(mahasiswa, "password"), token, refreshToken } };
-                } else {
-                        return BadRequestWithMessage("Password salah!");
-                }
-        } catch (err) {
-                Logger.error(`AuthService.loginMahasiswa : ${err}`);
-                return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+        if (mahasiswa && isPasswordVerified) {
+            const token = createToken(mahasiswa, 60 * 60 * 24);
+            const refreshToken = createToken(mahasiswa, 60 * 60 * 24 * 3);
+            return {
+                status: true,
+                data: {
+                    user: exclude(mahasiswa, "password"),
+                    token,
+                    refreshToken,
+                },
+            };
+        } else {
+            return BadRequestWithMessage("Password salah!");
         }
+    } catch (err) {
+        Logger.error(`AuthService.loginMahasiswa : ${err}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
 }
 
-export async function loginDosen(data: UserLoginDTO): Promise<ServiceResponse<any>> {
-        try {
-                const { identity, password } = data;
+export async function loginDosen(
+    data: UserLoginDTO
+): Promise<ServiceResponse<any>> {
+    try {
+        const { identity, password } = data;
 
-                const dosen: any = await prisma.dosen.findUnique({
-                        where: {
-                                nip: identity,
-                        },
-                });
+        const dosen: any = await prisma.dosen.findUnique({
+            where: {
+                nip: identity,
+            },
+            include: {
+                userLevel: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+            },
+        });
 
-                const isPasswordVerified = await bcrypt.compareSync(password, dosen?.password);
+        const isPasswordVerified = await bcrypt.compareSync(
+            password,
+            dosen?.password
+        );
 
-                if (dosen && isPasswordVerified) {
-                        const token = createToken(dosen, 60 * 60 * 24);
-                        const refreshToken = createToken(dosen, 60 * 60 * 24 * 3);
-                        return { status: true, data: { user: exclude(dosen, "password"), token, refreshToken } };
-                } else {
-                        return BadRequestWithMessage("Password salah!");
-                }
-        } catch (err) {
-                Logger.error(`AuthService.loginMahasiswa : ${err}`);
-                return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+        if (dosen && isPasswordVerified) {
+            const token = createToken(dosen, 60 * 60 * 24);
+            const refreshToken = createToken(dosen, 60 * 60 * 24 * 3);
+            return {
+                status: true,
+                data: { user: exclude(dosen, "password"), token, refreshToken },
+            };
+        } else {
+            return BadRequestWithMessage("Password salah!");
         }
+    } catch (err) {
+        Logger.error(`AuthService.loginMahasiswa : ${err}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
 }
 
-export async function loginWithEmail(data: UserLoginDTO): Promise<ServiceResponse<any>> {
-        try {
-                const { identity, password } = data;
+export async function loginWithEmail(
+    data: UserLoginDTO
+): Promise<ServiceResponse<any>> {
+    try {
+        const { identity, password } = data;
 
-                const user: any = await prisma.user.findFirst({
-                        where: {
-                                email: identity,
-                        },
-                        include: {
-                                userLevel: true,
-                        },
-                });
+        const user: any = await prisma.user.findFirst({
+            where: {
+                email: identity,
+            },
+            include: {
+                userLevel: true,
+            },
+        });
 
-                const isPasswordVerified = await bcrypt.compareSync(password, user?.password);
+        const isPasswordVerified = await bcrypt.compareSync(
+            password,
+            user?.password
+        );
 
-                if (user && isPasswordVerified) {
-                        const token = createToken(user, 60 * 60 * 24);
-                        const refreshToken = createToken(user, 60 * 60 * 24 * 3);
-                        return { status: true, data: { user: exclude(user, "password"), token, refreshToken } };
-                } else {
-                        return BadRequestWithMessage("Password salah!");
-                }
-        } catch (err) {
-                Logger.error(`AuthService.loginWithEmail : ${err}`);
-                return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+        if (user && isPasswordVerified) {
+            const token = createToken(user, 60 * 60 * 24);
+            const refreshToken = createToken(user, 60 * 60 * 24 * 3);
+            return {
+                status: true,
+                data: { user: exclude(user, "password"), token, refreshToken },
+            };
+        } else {
+            return BadRequestWithMessage("Password salah!");
         }
+    } catch (err) {
+        Logger.error(`AuthService.loginWithEmail : ${err}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
 }
 
-export async function register(data: UserRegisterDTO): Promise<ServiceResponse<any>> {
-        try {
-                data.password = await bcrypt.hash(data.password, 12);
+export async function register(
+    data: UserRegisterDTO
+): Promise<ServiceResponse<any>> {
+    try {
+        data.password = await bcrypt.hash(data.password, 12);
 
-                const newUser = await prisma.user.create({
-                        data,
-                });
+        const newUser = await prisma.user.create({
+            data,
+        });
 
-                const token = createToken(newUser);
-                const refreshToken = createToken(newUser, 60 * 60 * 24 * 3);
+        const token = createToken(newUser);
+        const refreshToken = createToken(newUser, 60 * 60 * 24 * 3);
 
-                return {
-                        status: true,
-                        data: {
-                                user: exclude(newUser, "password"),
-                                token,
-                                refreshToken,
-                        },
-                };
-        } catch (err) {
-                Logger.error(`AuthService.register : ${err}`);
-                return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
-        }
+        return {
+            status: true,
+            data: {
+                user: exclude(newUser, "password"),
+                token,
+                refreshToken,
+            },
+        };
+    } catch (err) {
+        Logger.error(`AuthService.register : ${err}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
 }
 
 export function verifyToken(token: string): ServiceResponse<any> {
+    try {
         try {
-                try {
-                        const JWT_SECRET = process.env.JWT_SECRET || "";
-                        jwt.verify(token, JWT_SECRET);
-                        return {
-                                status: true,
-                                data: {},
-                        };
-                } catch (err) {
-                        return {
-                                status: false,
-                                err: {
-                                        code: 403,
-                                        message: "Invalid Token",
-                                },
-                                data: {},
-                        };
-                }
+            const JWT_SECRET = process.env.JWT_SECRET || "";
+            jwt.verify(token, JWT_SECRET);
+            return {
+                status: true,
+                data: {},
+            };
         } catch (err) {
-                Logger.error(`AuthService.verifyToken : ${err}`);
-                return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+            return {
+                status: false,
+                err: {
+                    code: 403,
+                    message: "Invalid Token",
+                },
+                data: {},
+            };
         }
+    } catch (err) {
+        Logger.error(`AuthService.verifyToken : ${err}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
 }
 
-export async function changePassword(userId: string, oldPassword: string, newPassword: string): Promise<ServiceResponse<any>> {
-        try {
-                const user = await prisma.user.findUnique({
-                        where: {
-                                id: userId,
-                        },
-                });
+export async function changePassword(
+    userId: string,
+    oldPassword: string,
+    newPassword: string
+): Promise<ServiceResponse<any>> {
+    try {
+        const user = await prisma.user.findUnique({
+            where: {
+                id: userId,
+            },
+        });
 
-                if (!user) {
-                        return BadRequestWithMessage("Invalid User ID!");
-                }
-
-                const match = await bcrypt.compare(oldPassword, user.password);
-
-                if (!match) {
-                        return BadRequestWithMessage("Incorrect Old Password!");
-                }
-
-                const hashedNewPassword = await bcrypt.hash(newPassword, 12);
-
-                await prisma.user.update({
-                        where: {
-                                id: userId,
-                        },
-                        data: {
-                                password: hashedNewPassword,
-                        },
-                });
-
-                return {
-                        status: true,
-                        data: {},
-                };
-        } catch (err) {
-                Logger.error(`AuthService.changePassword : ${err}`);
-                return {
-                        status: false,
-                        err: { message: (err as Error).message, code: 500 },
-                        data: {},
-                };
+        if (!user) {
+            return BadRequestWithMessage("Invalid User ID!");
         }
+
+        const match = await bcrypt.compare(oldPassword, user.password);
+
+        if (!match) {
+            return BadRequestWithMessage("Incorrect Old Password!");
+        }
+
+        const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+
+        await prisma.user.update({
+            where: {
+                id: userId,
+            },
+            data: {
+                password: hashedNewPassword,
+            },
+        });
+
+        return {
+            status: true,
+            data: {},
+        };
+    } catch (err) {
+        Logger.error(`AuthService.changePassword : ${err}`);
+        return {
+            status: false,
+            err: { message: (err as Error).message, code: 500 },
+            data: {},
+        };
+    }
 }

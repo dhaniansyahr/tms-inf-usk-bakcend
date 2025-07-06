@@ -367,7 +367,7 @@ export async function getListParticipantsByJadwalId(
                     id: meeting.id,
                     pertemuan: meeting.pertemuan,
                     tanggal: meeting.tanggal,
-                    isPresent: absensi ? absensi.isPresent : false,
+                    isPresent: absensi?.isPresent,
                     keterangan: absensi ? absensi.keterangan : null,
                     waktuAbsen: absensi ? absensi.waktuAbsen : null,
                 };
@@ -409,7 +409,7 @@ export async function getListParticipantsByJadwalId(
                     id: meeting.id,
                     pertemuan: meeting.pertemuan,
                     tanggal: meeting.tanggal,
-                    isPresent: absensi ? absensi.isPresent : false,
+                    isPresent: absensi?.isPresent,
                     keterangan: absensi ? absensi.keterangan : null,
                     waktuAbsen: absensi ? absensi.waktuAbsen : null,
                 };

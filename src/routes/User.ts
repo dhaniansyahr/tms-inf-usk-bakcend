@@ -8,24 +8,66 @@ const UserRoutes = new Hono();
 UserRoutes.get(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("USER_MANAGEMENT", "read"),
+    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
     UserController.getAll
 );
 
-UserRoutes.get("/mahasiswa", AuthMiddleware.checkJwt, UserController.getAllMahasiswa);
+UserRoutes.get(
+    "/mahasiswa",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
+    UserController.getAllMahasiswa
+);
 
-UserRoutes.get("/dosen", AuthMiddleware.checkJwt, UserController.getAllDosen);
+UserRoutes.get(
+    "/dosen",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
+    UserController.getAllDosen
+);
 
-UserRoutes.get("/mahasiswa/:id", AuthMiddleware.checkJwt, UserController.getByIdMahasiswa);
+UserRoutes.get(
+    "/mahasiswa/:id",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
+    UserController.getByIdMahasiswa
+);
 
-UserRoutes.get("/dosen/:id", AuthMiddleware.checkJwt, UserController.getByIdDosen);
+UserRoutes.get(
+    "/dosen/:id",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
+    UserController.getByIdDosen
+);
 
-UserRoutes.get("/:id", AuthMiddleware.checkJwt, UserController.getById);
+UserRoutes.get(
+    "/:id",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
+    UserController.getById
+);
 
-UserRoutes.post("/", AuthMiddleware.checkJwt, UserValidation.validateUser, UserController.create);
+UserRoutes.post(
+    "/",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("MASTER_DATA", "create"),
+    UserValidation.validateUser,
+    UserController.create
+);
 
-UserRoutes.put("/:id", AuthMiddleware.checkJwt, UserValidation.validateUser, UserController.update);
+UserRoutes.put(
+    "/:id",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("MASTER_DATA", "update"),
+    UserValidation.validateUser,
+    UserController.update
+);
 
-UserRoutes.delete("/", AuthMiddleware.checkJwt, UserController.deleteByIds);
+UserRoutes.delete(
+    "/",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("MASTER_DATA", "delete"),
+    UserController.deleteByIds
+);
 
 export default UserRoutes;

@@ -5,22 +5,56 @@ import * as JadwalValidation from "$validations/JdwalValidation";
 
 const JadwalRoutes = new Hono();
 
-JadwalRoutes.get("/", AuthMiddleware.checkJwt, JadwalController.getAll);
+JadwalRoutes.get(
+    "/",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "read"),
+    JadwalController.getAll
+);
 
-JadwalRoutes.get("/diagnose", AuthMiddleware.checkJwt, JadwalController.diagnoseScheduling);
+JadwalRoutes.get(
+    "/diagnose",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "read"),
+    JadwalController.diagnoseScheduling
+);
 
-JadwalRoutes.get("/mata-kuliah", AuthMiddleware.checkJwt, JadwalController.getAllMatakuliah);
+JadwalRoutes.get(
+    "/mata-kuliah",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
+    JadwalController.getAllMatakuliah
+);
 
-JadwalRoutes.get("/:id", AuthMiddleware.checkJwt, JadwalController.getById);
+JadwalRoutes.get(
+    "/:id",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "read"),
+    JadwalController.getById
+);
 
-JadwalRoutes.post("/", AuthMiddleware.checkJwt, JadwalValidation.validateJadwal, JadwalController.create);
+JadwalRoutes.post(
+    "/",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "create"),
+    JadwalValidation.validateJadwal,
+    JadwalController.create
+);
 
-JadwalRoutes.post("/generate-all", AuthMiddleware.checkJwt, JadwalController.generateAllAvailableSchedules);
+JadwalRoutes.post(
+    "/generate-all",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "generate"),
+    JadwalController.generateAllAvailableSchedules
+);
 
 JadwalRoutes.put("/:id", AuthMiddleware.checkJwt, JadwalController.update);
 
-JadwalRoutes.delete("/", AuthMiddleware.checkJwt, JadwalController.deleteByIds);
-
-JadwalRoutes.post("/check", AuthMiddleware.checkJwt, JadwalController.checkFreeSchedule);
+JadwalRoutes.post(
+    "/check",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "create"),
+    JadwalController.checkFreeSchedule
+);
 
 export default JadwalRoutes;

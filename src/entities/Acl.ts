@@ -1,7 +1,7 @@
 export interface AclDTO {
-    userLevelId: string;
-    permissions: {
-        subject: string;
-        action: string[];
-    }[];
+  roleName: string;
+  permissions: {
+    subject: string;
+    action: string[];
+  }[];
 }

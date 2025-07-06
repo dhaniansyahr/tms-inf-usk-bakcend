@@ -38,7 +38,7 @@ export async function seedAcl(prisma: PrismaClient) {
             },
             {
                 subject: "JADWAL",
-                action: ["read", "create", "update", "delete", "generete"],
+                action: ["read", "create", "update", "delete", "generate"],
             },
             {
                 subject: "HISTORY_KEPALA_LAB",

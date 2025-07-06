@@ -306,6 +306,16 @@ export async function getAll(
           sks: true,
         },
       },
+      asisten: {
+        select: {
+          mahasiswa: {
+            select: {
+              nama: true,
+              npm: true,
+            },
+          },
+        },
+      },
     };
 
     // Filter only for PRAKTIKUM courses
@@ -375,7 +385,16 @@ export async function getById(
         dosen: true,
         ruangan: true,
         shift: true,
-        asisten: true,
+        asisten: {
+          include: {
+            Mahasiswa: {
+              select: {
+                nama: true,
+                npm: true,
+              },
+            },
+          },
+        },
         Meeting: {
           orderBy: {
             pertemuan: "asc",

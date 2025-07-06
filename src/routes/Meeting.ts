@@ -4,6 +4,12 @@ import * as MeetingController from "$controllers/rest/MeetingController";
 
 const MeetingRoutes = new Hono();
 
+MeetingRoutes.get(
+    "/absent-when-ready",
+    AuthMiddleware.checkJwt,
+    MeetingController.getMeetingWhenReady
+);
+
 MeetingRoutes.get("/:id", AuthMiddleware.checkJwt, MeetingController.getById);
 
 MeetingRoutes.put("/:id", AuthMiddleware.checkJwt, MeetingController.update);

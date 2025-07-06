@@ -11,8 +11,10 @@ AbsensiRoutes.get("/:id", AuthMiddleware.checkJwt, AbsensiController.getById);
 
 AbsensiRoutes.post("/", AuthMiddleware.checkJwt, AbsensiController.create);
 
-AbsensiRoutes.put("/:id", AuthMiddleware.checkJwt, AbsensiController.update);
-
-AbsensiRoutes.delete("/", AuthMiddleware.checkJwt, AbsensiController.deleteByIds);
+AbsensiRoutes.delete(
+  "/",
+  AuthMiddleware.checkJwt,
+  AbsensiController.deleteByIds
+);
 
 export default AbsensiRoutes;

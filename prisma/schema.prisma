@@ -229,7 +229,6 @@ model Jadwal {
   dosen                 Dosen[]
   asisten               AsistenLab[]
   mahasiswa             Mahasiswa[]
-  Absensi               Absensi[]
   Meeting               Meeting[]
   PendaftaranAsistenLab PendaftaranAsistenLab[]
 }
@@ -289,7 +288,6 @@ model Holidays {
 model Absensi {
   id          String    @id
   mahasiswaId String?
-  jadwalId    String
   meetingId   String?
   dosenId     String?
   isPresent   Boolean   @default(false)
@@ -300,7 +298,6 @@ model Absensi {
   deletedAt   DateTime?
 
   mahasiswa Mahasiswa? @relation(fields: [mahasiswaId], references: [id])
-  jadwal    Jadwal     @relation(fields: [jadwalId], references: [id])
   meeting   Meeting?   @relation(fields: [meetingId], references: [id])
   dosen     Dosen?     @relation(fields: [dosenId], references: [id])
 

@@ -286,7 +286,8 @@ export async function getAll(
     try {
         const usedFilters = buildFilterQueryLimitOffsetV2(filters);
 
-        usedFilters.include = {
+        // Build base include configuration
+        const includeConfig = {
             ruangan: {
                 select: {
                     nama: true,
@@ -312,6 +313,14 @@ export async function getAll(
                     sks: true,
                 },
             },
+            mahasiswa: {
+                select: {
+                    id: true,
+                    nama: true,
+                    npm: true,
+                    semester: true,
+                },
+            },
             asisten: {
                 include: {
                     Mahasiswa: {
@@ -324,8 +333,8 @@ export async function getAll(
             },
         };
 
-        // Filter only for PRAKTIKUM courses
-        usedFilters.where = {
+        // Build base where conditions
+        const baseWhere = {
             ...usedFilters.where,
             matakuliah: {
                 nama: {
@@ -335,34 +344,48 @@ export async function getAll(
             semester: isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL,
         };
 
-        // if not Operator, filter jadwal where they are assigned to them
-        if (user.userLevel.name === "DOSEN") {
-            usedFilters.where.dosen = {
-                id: { in: user.id },
-            };
+        // Add role-based filtering
+        const roleBasedWhere = { ...baseWhere };
+
+        switch (user.userLevel.name) {
+            case "DOSEN":
+                roleBasedWhere.dosen = {
+                    some: {
+                        id: user.id,
+                    },
+                };
+                break;
+            case "MAHASISWA":
+                roleBasedWhere.mahasiswa = {
+                    some: {
+                        id: user.id,
+                    },
+                };
+                break;
+            // SUPER_ADMIN and other roles see all data
         }
 
-        if (user.userLevel.name === "MAHASISWA") {
-            usedFilters.where.mahasiswa = {
-                id: { in: user.id },
-            };
-        }
+        // Build final query configuration
+        const queryConfig = {
+            ...usedFilters,
+            include: includeConfig,
+            where: roleBasedWhere,
+            orderBy: [
+                { hari: "desc" as const },
+                { shift: { startTime: "asc" as const } },
+            ],
+        };
 
+        // Execute queries in parallel
         const [jadwal, totalData] = await Promise.all([
-            prisma.jadwal.findMany({
-                ...usedFilters,
-                orderBy: {
-                    hari: "desc",
-                },
-            }),
+            prisma.jadwal.findMany(queryConfig),
             prisma.jadwal.count({
-                where: usedFilters.where,
+                where: roleBasedWhere,
             }),
         ]);
 
-        let totalPage = 1;
-        if (totalData > usedFilters.take)
-            totalPage = Math.ceil(totalData / usedFilters.take);
+        // Calculate pagination
+        const totalPage = Math.ceil(totalData / usedFilters.take);
 
         return {
             status: true,

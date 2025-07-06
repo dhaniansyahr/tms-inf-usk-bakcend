@@ -2,62 +2,143 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { ulid } from "ulid";
 
 export async function seedAcl(prisma: PrismaClient) {
-    const superAdminLevel = await prisma.userLevels.findFirst({
-        where: {
-            name: "SUPER_ADMIN",
-        },
-    });
+    // Get all required user levels
+    const [superAdminLevel, dosenLevel, mahasiswaLevel] = await Promise.all([
+        prisma.userLevels.findFirst({ where: { name: "SUPER_ADMIN" } }),
+        prisma.userLevels.findFirst({ where: { name: "DOSEN" } }),
+        prisma.userLevels.findFirst({ where: { name: "MAHASISWA" } }),
+    ]);
 
-    if (!superAdminLevel) {
-        console.log("SUPER_ADMIN user level not found, skipping ACL seeding");
+    if (!superAdminLevel || !dosenLevel || !mahasiswaLevel) {
+        console.log("Required user levels not found, skipping ACL seeding");
         return;
     }
 
-    const rawRules = {
-        userLevelId: superAdminLevel.id,
-        permissions: [
-            {
-                subject: "DASHBOARD",
-                action: ["read"],
-            },
-            {
-                subject: "MASTER_DATA",
-                action: ["read", "create", "update", "delete"],
-            },
-            {
-                subject: "ROLE_MANAGEMENT",
-                action: ["read", "create", "update", "delete"],
-            },
-            {
-                subject: "RUANGAN",
-                action: ["read", "create", "update", "delete"],
-            },
-            {
-                subject: "SHIFT",
-                action: ["read", "create", "update", "delete"],
-            },
-            {
-                subject: "JADWAL",
-                action: ["read", "create", "update", "delete", "generate"],
-            },
-            {
-                subject: "HISTORY_KEPALA_LAB",
-                action: ["create", "update"],
-            },
-            {
-                subject: "PENDAFTARAN_ASISTEN_LAB",
-                action: ["read", "create", "update", "delete"],
-            },
-            {
-                subject: "PENERIMAAN_ASISTEN_LAB",
-                action: ["read", "create", "update", "delete"],
-            },
-            {
-                subject: "ABSENSI",
-                action: ["read", "create", "update", "delete"],
-            },
-        ],
-    };
+    const userLevelPermissions = [
+        {
+            userLevelId: superAdminLevel.id,
+            permissions: [
+                {
+                    subject: "DASHBOARD",
+                    action: ["read"],
+                },
+                {
+                    subject: "MASTER_DATA",
+                    action: ["read", "create", "update", "delete"],
+                },
+                {
+                    subject: "ROLE_MANAGEMENT",
+                    action: ["read", "create", "update", "delete"],
+                },
+                {
+                    subject: "RUANGAN",
+                    action: ["read", "create", "update", "delete"],
+                },
+                {
+                    subject: "SHIFT",
+                    action: ["read", "create", "update", "delete"],
+                },
+                {
+                    subject: "JADWAL",
+                    action: ["read", "create", "update", "delete", "generate"],
+                },
+                {
+                    subject: "HISTORY_KEPALA_LAB",
+                    action: ["create", "update"],
+                },
+                {
+                    subject: "PENDAFTARAN_ASISTEN_LAB",
+                    action: ["read", "create", "update", "delete"],
+                },
+                {
+                    subject: "PENERIMAAN_ASISTEN_LAB",
+                    action: ["read", "create", "update", "delete"],
+                },
+                {
+                    subject: "ABSENSI",
+                    action: ["read", "create", "update", "delete"],
+                },
+                {
+                    subject: "MEETING",
+                    action: ["read", "create", "update", "delete"],
+                },
+                {
+                    subject: "MAHASISWA",
+                    action: ["read", "create", "update", "delete"],
+                },
+                {
+                    subject: "DOSEN",
+                    action: ["read", "create", "update", "delete"],
+                },
+            ],
+        },
+        {
+            userLevelId: dosenLevel.id,
+            permissions: [
+                {
+                    subject: "DASHBOARD",
+                    action: ["read"],
+                },
+                {
+                    subject: "JADWAL",
+                    action: ["read"],
+                },
+                {
+                    subject: "ABSENSI",
+                    action: ["read", "create", "update"],
+                },
+                {
+                    subject: "MEETING",
+                    action: ["read", "create", "update"],
+                },
+                {
+                    subject: "MAHASISWA",
+                    action: ["read"],
+                },
+                {
+                    subject: "PENDAFTARAN_ASISTEN_LAB",
+                    action: ["read"],
+                },
+                {
+                    subject: "PENERIMAAN_ASISTEN_LAB",
+                    action: ["read", "update"],
+                },
+                {
+                    subject: "DOSEN",
+                    action: ["read", "update"],
+                },
+            ],
+        },
+        {
+            userLevelId: mahasiswaLevel.id,
+            permissions: [
+                {
+                    subject: "DASHBOARD",
+                    action: ["read"],
+                },
+                {
+                    subject: "JADWAL",
+                    action: ["read"],
+                },
+                {
+                    subject: "ABSENSI",
+                    action: ["read", "create"],
+                },
+                {
+                    subject: "MEETING",
+                    action: ["read"],
+                },
+                {
+                    subject: "PENDAFTARAN_ASISTEN_LAB",
+                    action: ["read", "create"],
+                },
+                {
+                    subject: "MAHASISWA",
+                    action: ["read", "update"],
+                },
+            ],
+        },
+    ];
 
     try {
         // Get all existing features and actions in one go to minimize queries
@@ -87,26 +168,29 @@ export async function seedAcl(prisma: PrismaClient) {
         const featuresToCreate: Prisma.FeaturesCreateManyInput[] = [];
         const actionsToCreate: Prisma.ActionsCreateManyInput[] = [];
 
-        for (const rule of rawRules.permissions) {
-            // Add feature if it doesn't exist
-            if (!existingFeatureNames.has(rule.subject)) {
-                featuresToCreate.push({
-                    id: ulid(),
-                    name: rule.subject,
-                });
-                existingFeatureNames.add(rule.subject); // Add to set to avoid duplicates
-            }
-
-            // Add actions if they don't exist
-            for (const action of rule.action) {
-                const actionKey = `${rule.subject}:${action}`;
-                if (!existingActionKeys.has(actionKey)) {
-                    actionsToCreate.push({
+        // Process all permissions for all user levels
+        for (const userLevelPermission of userLevelPermissions) {
+            for (const rule of userLevelPermission.permissions) {
+                // Add feature if it doesn't exist
+                if (!existingFeatureNames.has(rule.subject)) {
+                    featuresToCreate.push({
                         id: ulid(),
-                        name: action,
-                        namaFeature: rule.subject,
+                        name: rule.subject,
                     });
-                    existingActionKeys.add(actionKey); // Add to set to avoid duplicates
+                    existingFeatureNames.add(rule.subject); // Add to set to avoid duplicates
+                }
+
+                // Add actions if they don't exist
+                for (const action of rule.action) {
+                    const actionKey = `${rule.subject}:${action}`;
+                    if (!existingActionKeys.has(actionKey)) {
+                        actionsToCreate.push({
+                            id: ulid(),
+                            name: action,
+                            namaFeature: rule.subject,
+                        });
+                        existingActionKeys.add(actionKey); // Add to set to avoid duplicates
+                    }
                 }
             }
         }
@@ -145,29 +229,38 @@ export async function seedAcl(prisma: PrismaClient) {
         // Execute all creation operations in parallel
         await Promise.all(createPromises);
 
-        // Get existing ACL mappings to avoid duplicates
+        // Get existing ACL mappings for all user levels to avoid duplicates
         const existingAcls = await prisma.acl.findMany({
-            where: { userLevelId: superAdminLevel.id },
-            select: { namaFeature: true, namaAction: true },
+            where: {
+                userLevelId: {
+                    in: [superAdminLevel.id, dosenLevel.id, mahasiswaLevel.id],
+                },
+            },
+            select: { namaFeature: true, namaAction: true, userLevelId: true },
         });
 
         const existingAclKeys = new Set(
-            existingAcls.map((acl) => `${acl.namaFeature}:${acl.namaAction}`)
+            existingAcls.map(
+                (acl) =>
+                    `${acl.userLevelId}:${acl.namaFeature}:${acl.namaAction}`
+            )
         );
 
         // Prepare ACL data for bulk creation
         const aclCreateManyData: Prisma.AclCreateManyInput[] = [];
 
-        for (const rule of rawRules.permissions) {
-            for (const action of rule.action) {
-                const aclKey = `${rule.subject}:${action}`;
-                if (!existingAclKeys.has(aclKey)) {
-                    aclCreateManyData.push({
-                        id: ulid(),
-                        namaAction: action,
-                        namaFeature: rule.subject,
-                        userLevelId: superAdminLevel.id,
-                    });
+        for (const userLevelPermission of userLevelPermissions) {
+            for (const rule of userLevelPermission.permissions) {
+                for (const action of rule.action) {
+                    const aclKey = `${userLevelPermission.userLevelId}:${rule.subject}:${action}`;
+                    if (!existingAclKeys.has(aclKey)) {
+                        aclCreateManyData.push({
+                            id: ulid(),
+                            namaAction: action,
+                            namaFeature: rule.subject,
+                            userLevelId: userLevelPermission.userLevelId,
+                        });
+                    }
                 }
             }
         }
@@ -184,6 +277,7 @@ export async function seedAcl(prisma: PrismaClient) {
         console.log(`- Features created: ${featuresToCreate.length}`);
         console.log(`- Actions created: ${actionsToCreate.length}`);
         console.log(`- ACL mappings created: ${aclCreateManyData.length}`);
+        console.log(`- User levels configured: SUPER_ADMIN, DOSEN, MAHASISWA`);
     } catch (error) {
         console.error("Error seeding ACL:", error);
         throw error;

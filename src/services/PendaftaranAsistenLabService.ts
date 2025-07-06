@@ -678,10 +678,10 @@ export async function getAllAsistenLabByJadwalId(
     jadwalId: string
 ): Promise<ServiceResponse<{}>> {
     try {
-        const asistenLab = await prisma.asistenLab.findMany({
-            where: { jadwalId },
+        const asistenLab = await prisma.pendaftaranAsistenLab.findMany({
+            where: { jadwalId, status: "DISETUJUI" },
             include: {
-                Mahasiswa: true,
+                mahasiswa: true,
             },
         });
 

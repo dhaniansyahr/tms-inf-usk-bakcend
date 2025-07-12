@@ -8,21 +8,21 @@ const ShiftRoutes = new Hono();
 ShiftRoutes.get(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
+    AuthMiddleware.checkAccess("SHIFT", "read"),
     ShiftController.getAll
 );
 
 ShiftRoutes.get(
     "/:id",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
+    AuthMiddleware.checkAccess("SHIFT", "read"),
     ShiftController.getById
 );
 
 ShiftRoutes.post(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "create"),
+    AuthMiddleware.checkAccess("SHIFT", "create"),
     ShiftValidation.validateShift,
     ShiftController.create
 );
@@ -30,7 +30,7 @@ ShiftRoutes.post(
 ShiftRoutes.put(
     "/:id",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "update"),
+    AuthMiddleware.checkAccess("SHIFT", "update"),
     ShiftValidation.validateShift,
     ShiftController.update
 );
@@ -38,7 +38,7 @@ ShiftRoutes.put(
 ShiftRoutes.delete(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "delete"),
+    AuthMiddleware.checkAccess("SHIFT", "delete"),
     ShiftController.deleteByIds
 );
 

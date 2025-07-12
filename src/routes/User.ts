@@ -13,34 +13,6 @@ UserRoutes.get(
 );
 
 UserRoutes.get(
-    "/mahasiswa",
-    AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
-    UserController.getAllMahasiswa
-);
-
-UserRoutes.get(
-    "/dosen",
-    AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
-    UserController.getAllDosen
-);
-
-UserRoutes.get(
-    "/mahasiswa/:id",
-    AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
-    UserController.getByIdMahasiswa
-);
-
-UserRoutes.get(
-    "/dosen/:id",
-    AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
-    UserController.getByIdDosen
-);
-
-UserRoutes.get(
     "/:id",
     AuthMiddleware.checkJwt,
     AuthMiddleware.checkAccess("MASTER_DATA", "read"),

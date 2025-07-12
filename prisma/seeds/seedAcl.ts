@@ -20,19 +20,33 @@ export async function seedAcl(prisma: PrismaClient) {
             permissions: [
                 {
                     subject: "DASHBOARD",
-                    action: ["read"],
+                    action: ["read", "analytics", "absensi"],
                 },
                 {
                     subject: "MASTER_DATA",
                     action: ["read", "create", "update", "delete"],
                 },
                 {
-                    subject: "ROLE_MANAGEMENT",
-                    action: ["read", "create", "update", "delete"],
+                    subject: "MATA_KULIAH",
+                    action: ["read"],
+                },
+                {
+                    subject: "MAHASISWA",
+                    action: ["read"],
+                },
+                {
+                    subject: "DOSEN",
+                    action: ["read"],
                 },
                 {
                     subject: "RUANGAN",
-                    action: ["read", "create", "update", "delete"],
+                    action: [
+                        "read",
+                        "create",
+                        "update",
+                        "delete",
+                        "change_kepala_lab",
+                    ],
                 },
                 {
                     subject: "SHIFT",
@@ -40,35 +54,26 @@ export async function seedAcl(prisma: PrismaClient) {
                 },
                 {
                     subject: "JADWAL",
-                    action: ["read", "create", "update", "delete", "generate"],
-                },
-                {
-                    subject: "HISTORY_KEPALA_LAB",
-                    action: ["create", "update"],
+                    action: [
+                        "read",
+                        "create",
+                        "update",
+                        "generate",
+                        "assign",
+                        "absensi",
+                    ],
                 },
                 {
                     subject: "PENDAFTARAN_ASISTEN_LAB",
-                    action: ["read", "create", "update", "delete"],
+                    action: ["read", "create", "update"],
                 },
                 {
                     subject: "PENERIMAAN_ASISTEN_LAB",
-                    action: ["read", "create", "update", "delete"],
+                    action: ["read", "create", "update"],
                 },
                 {
-                    subject: "ABSENSI",
-                    action: ["read", "create", "update", "delete"],
-                },
-                {
-                    subject: "MEETING",
-                    action: ["read", "create", "update", "delete"],
-                },
-                {
-                    subject: "MAHASISWA",
-                    action: ["read", "create", "update", "delete"],
-                },
-                {
-                    subject: "DOSEN",
-                    action: ["read", "create", "update", "delete"],
+                    subject: "ROLE_MANAGEMENT",
+                    action: ["read", "create", "update", "delete", "duplicate"],
                 },
             ],
         },
@@ -77,35 +82,19 @@ export async function seedAcl(prisma: PrismaClient) {
             permissions: [
                 {
                     subject: "DASHBOARD",
-                    action: ["read"],
+                    action: ["read", "analytics", "absensi"],
                 },
                 {
                     subject: "JADWAL",
-                    action: ["read"],
-                },
-                {
-                    subject: "ABSENSI",
-                    action: ["read", "create", "update"],
-                },
-                {
-                    subject: "MEETING",
-                    action: ["read", "create", "update"],
-                },
-                {
-                    subject: "MAHASISWA",
-                    action: ["read"],
+                    action: ["read", "update", "absensi"],
                 },
                 {
                     subject: "PENDAFTARAN_ASISTEN_LAB",
-                    action: ["read"],
+                    action: ["read", "update"],
                 },
                 {
                     subject: "PENERIMAAN_ASISTEN_LAB",
-                    action: ["read", "update"],
-                },
-                {
-                    subject: "DOSEN",
-                    action: ["read", "update"],
+                    action: ["read", "create", "update"],
                 },
             ],
         },
@@ -114,27 +103,15 @@ export async function seedAcl(prisma: PrismaClient) {
             permissions: [
                 {
                     subject: "DASHBOARD",
-                    action: ["read"],
+                    action: ["read", "absensi"],
                 },
                 {
                     subject: "JADWAL",
-                    action: ["read"],
-                },
-                {
-                    subject: "ABSENSI",
-                    action: ["read", "create"],
-                },
-                {
-                    subject: "MEETING",
-                    action: ["read"],
+                    action: ["read", "absensi"],
                 },
                 {
                     subject: "PENDAFTARAN_ASISTEN_LAB",
                     action: ["read", "create"],
-                },
-                {
-                    subject: "MAHASISWA",
-                    action: ["read", "update"],
                 },
             ],
         },

@@ -1,6 +1,10 @@
 import { Context, TypedResponse } from "hono";
 import * as UserService from "$services/UserService";
-import { handleServiceErrorWithResponse, response_created, response_success } from "$utils/response.utils";
+import {
+    handleServiceErrorWithResponse,
+    response_created,
+    response_success,
+} from "$utils/response.utils";
 import { UserDTO, UserRegisterDTO } from "$entities/User";
 import { FilteringQueryV2 } from "$entities/Query";
 import { checkFilteringQueryV2 } from "$controllers/helpers/CheckFilteringQuery";
@@ -14,7 +18,11 @@ export async function create(c: Context): Promise<TypedResponse> {
         return handleServiceErrorWithResponse(c, serviceResponse);
     }
 
-    return response_created(c, serviceResponse.data, "Successfully created new User!");
+    return response_created(
+        c,
+        serviceResponse.data,
+        "Successfully created new User!"
+    );
 }
 
 export async function getAll(c: Context): Promise<TypedResponse> {
@@ -26,31 +34,11 @@ export async function getAll(c: Context): Promise<TypedResponse> {
         return handleServiceErrorWithResponse(c, serviceResponse);
     }
 
-    return response_success(c, serviceResponse.data, "Successfully fetched all User!");
-}
-
-export async function getAllMahasiswa(c: Context): Promise<TypedResponse> {
-    const filters: FilteringQueryV2 = checkFilteringQueryV2(c);
-
-    const serviceResponse = await UserService.getAllMahasiswa(filters);
-
-    if (!serviceResponse.status) {
-        return handleServiceErrorWithResponse(c, serviceResponse);
-    }
-
-    return response_success(c, serviceResponse.data, "Successfully fetched all Mahasiswa!");
-}
-
-export async function getAllDosen(c: Context): Promise<TypedResponse> {
-    const filters: FilteringQueryV2 = checkFilteringQueryV2(c);
-
-    const serviceResponse = await UserService.getAllDosen(filters);
-
-    if (!serviceResponse.status) {
-        return handleServiceErrorWithResponse(c, serviceResponse);
-    }
-
-    return response_success(c, serviceResponse.data, "Successfully fetched all Dosen!");
+    return response_success(
+        c,
+        serviceResponse.data,
+        "Successfully fetched all User!"
+    );
 }
 
 export async function getById(c: Context): Promise<TypedResponse> {
@@ -62,31 +50,11 @@ export async function getById(c: Context): Promise<TypedResponse> {
         return handleServiceErrorWithResponse(c, serviceResponse);
     }
 
-    return response_success(c, serviceResponse.data, "Successfully fetched indikator kerja by id!");
-}
-
-export async function getByIdMahasiswa(c: Context): Promise<TypedResponse> {
-    const id = c.req.param("id");
-
-    const serviceResponse = await UserService.getByIdMahasiswa(id);
-
-    if (!serviceResponse.status) {
-        return handleServiceErrorWithResponse(c, serviceResponse);
-    }
-
-    return response_success(c, serviceResponse.data, "Successfully fetched Mahasiswa by id!");
-}
-
-export async function getByIdDosen(c: Context): Promise<TypedResponse> {
-    const id = c.req.param("id");
-
-    const serviceResponse = await UserService.getByIdDosen(id);
-
-    if (!serviceResponse.status) {
-        return handleServiceErrorWithResponse(c, serviceResponse);
-    }
-
-    return response_success(c, serviceResponse.data, "Successfully fetched Dosen by id!");
+    return response_success(
+        c,
+        serviceResponse.data,
+        "Successfully fetched indikator kerja by id!"
+    );
 }
 
 export async function update(c: Context): Promise<TypedResponse> {
@@ -99,7 +67,11 @@ export async function update(c: Context): Promise<TypedResponse> {
         return handleServiceErrorWithResponse(c, serviceResponse);
     }
 
-    return response_success(c, serviceResponse.data, "Successfully updated User!");
+    return response_success(
+        c,
+        serviceResponse.data,
+        "Successfully updated User!"
+    );
 }
 
 export async function deleteByIds(c: Context): Promise<TypedResponse> {
@@ -111,5 +83,9 @@ export async function deleteByIds(c: Context): Promise<TypedResponse> {
         return handleServiceErrorWithResponse(c, serviceResponse);
     }
 
-    return response_success(c, serviceResponse.data, "Successfully deleted User!");
+    return response_success(
+        c,
+        serviceResponse.data,
+        "Successfully deleted User!"
+    );
 }

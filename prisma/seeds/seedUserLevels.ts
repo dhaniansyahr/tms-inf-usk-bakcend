@@ -5,7 +5,6 @@ export async function seedUserLevels(prisma: PrismaClient) {
     const countUserLevels = await prisma.userLevels.count();
 
     const userLevelAkses = [
-        "LABORAN",
         "KEPALA_LABORATORIUM",
         "DOSEN",
         "ASISTEN_LABORATORIUM",

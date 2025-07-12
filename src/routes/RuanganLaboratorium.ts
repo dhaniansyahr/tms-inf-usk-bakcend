@@ -8,21 +8,21 @@ const RuanganLaboratoriumRoutes = new Hono();
 RuanganLaboratoriumRoutes.get(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
+    AuthMiddleware.checkAccess("RUANGAN", "read"),
     RuanganLaboratoriumController.getAll
 );
 
 RuanganLaboratoriumRoutes.get(
     "/:id",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
+    AuthMiddleware.checkAccess("RUANGAN", "read"),
     RuanganLaboratoriumController.getById
 );
 
 RuanganLaboratoriumRoutes.post(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "create"),
+    AuthMiddleware.checkAccess("RUANGAN", "create"),
     RuanganLaboratoriumValidation.validateRuanganLaboratoriumDTO,
     RuanganLaboratoriumController.create
 );
@@ -30,7 +30,7 @@ RuanganLaboratoriumRoutes.post(
 RuanganLaboratoriumRoutes.put(
     "/:id",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "update"),
+    AuthMiddleware.checkAccess("RUANGAN", "update"),
     RuanganLaboratoriumValidation.validateRuanganLaboratoriumDTO,
     RuanganLaboratoriumController.update
 );
@@ -38,7 +38,7 @@ RuanganLaboratoriumRoutes.put(
 RuanganLaboratoriumRoutes.put(
     "/assign-kepala-lab/:id",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("HISTORY_KEPALA_LAB", "update"),
+    AuthMiddleware.checkAccess("RUANGAN", "change_kepala_lab"),
     RuanganLaboratoriumValidation.validateAssignKepalaLabDTO,
     RuanganLaboratoriumController.assignKepalaLab
 );
@@ -46,7 +46,7 @@ RuanganLaboratoriumRoutes.put(
 RuanganLaboratoriumRoutes.delete(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "delete"),
+    AuthMiddleware.checkAccess("RUANGAN", "delete"),
     RuanganLaboratoriumController.deleteByIds
 );
 

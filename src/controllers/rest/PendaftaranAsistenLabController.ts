@@ -11,6 +11,7 @@ import {
 } from "$entities/PendaftaranAsistenLab";
 import { FilteringQueryV2 } from "$entities/Query";
 import { checkFilteringQueryV2 } from "$controllers/helpers/CheckFilteringQuery";
+import { UserJWTDAO } from "$entities/User";
 
 export async function create(c: Context): Promise<TypedResponse> {
     const data: PendaftaranAsistenLabDTO = await c.req.json();
@@ -30,8 +31,12 @@ export async function create(c: Context): Promise<TypedResponse> {
 
 export async function getAll(c: Context): Promise<TypedResponse> {
     const filters: FilteringQueryV2 = checkFilteringQueryV2(c);
+    const user: UserJWTDAO = c.get("jwtPayload");
 
-    const serviceResponse = await PendaftaranAsistenLabService.getAll(filters);
+    const serviceResponse = await PendaftaranAsistenLabService.getAll(
+        filters,
+        user
+    );
 
     if (!serviceResponse.status) {
         return handleServiceErrorWithResponse(c, serviceResponse);

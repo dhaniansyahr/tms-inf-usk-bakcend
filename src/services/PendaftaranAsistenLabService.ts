@@ -20,6 +20,7 @@ import {
 import { buildFilterQueryLimitOffsetV2 } from "./helpers/FilterQueryV2";
 import { ulid } from "ulid";
 import { isGanjilSemester } from "$utils/strings.utils";
+import { UserJWTDAO } from "$entities/User";
 
 /**
  * TODO:
@@ -164,43 +165,41 @@ export type GetAllResponse =
     | PagedList<PendaftaranAsistenLabWithRelations[]>
     | {};
 export async function getAll(
-    filters: FilteringQueryV2
+    filters: FilteringQueryV2,
+    user: UserJWTDAO
 ): Promise<ServiceResponse<GetAllResponse>> {
     try {
         const usedFilters = buildFilterQueryLimitOffsetV2(filters);
 
         // Add include relations to the filters
         const includeRelations = {
-            mahasiswa: {
-                select: {
-                    id: true,
-                    nama: true,
-                    npm: true,
-                    semester: true,
-                    tahunMasuk: true,
-                    isActive: true,
-                },
-            },
+            mahasiswa: true,
             jadwal: {
-                select: {
-                    id: true,
-                    hari: true,
-                    semester: true,
-                    tahun: true,
-                    matakuliah: {
-                        select: {
-                            id: true,
-                            nama: true,
-                            kode: true,
-                            type: true,
-                            sks: true,
-                            bidangMinat: true,
-                            semester: true,
-                        },
-                    },
+                include: {
+                    matakuliah: true,
+                    dosen: true,
                 },
             },
         };
+
+        // Check role is dosen
+        const role = await prisma.userLevels.findUnique({
+            where: { id: user.userLevelId },
+            select: { name: true },
+        });
+
+        // Filtered if dosen login, just show that dosen have relation with that jadwal
+        if (role?.name === "DOSEN") {
+            usedFilters.where = {
+                jadwal: {
+                    dosen: {
+                        some: {
+                            id: user.id,
+                        },
+                    },
+                },
+            };
+        }
 
         const [pendaftaranAsistenLab, totalData] = await Promise.all([
             prisma.pendaftaranAsistenLab.findMany({

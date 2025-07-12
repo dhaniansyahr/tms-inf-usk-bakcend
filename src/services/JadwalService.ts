@@ -7,13 +7,14 @@ import {
 } from "$entities/Service";
 import Logger from "$pkg/logger";
 import { prisma } from "$utils/prisma.utils";
-import { Jadwal, Matakuliah, SEMESTER } from "@prisma/client";
-import { JadwalDTO } from "$entities/Jadwal";
+import { Absensi, Jadwal, SEMESTER } from "@prisma/client";
+import { AbsentDTO, JadwalDTO, UpdateMeetingDTO } from "$entities/Jadwal";
 import { buildFilterQueryLimitOffsetV2 } from "./helpers/FilterQueryV2";
 import { HARI, HARI_LIST, jadwalGeneticService } from "./JadwalGeneticService";
 import { getCurrentAcademicYear, isGanjilSemester } from "$utils/strings.utils";
 import { UserJWTDAO } from "$entities/User";
 import { ulid } from "ulid";
+import { DateTime } from "luxon";
 
 /**
  * Automatically assign students and dosen for practical courses from corresponding theory course
@@ -454,54 +455,131 @@ export async function getById(
 }
 
 export type UpdateResponse = Jadwal | {};
-export async function update(
+export async function updateMeeting(
     id: string,
-    data: Partial<JadwalDTO>
+    data: UpdateMeetingDTO
 ): Promise<ServiceResponse<UpdateResponse>> {
     try {
-        let jadwal = await prisma.jadwal.findUnique({
-            where: {
-                id,
-            },
-        });
-
-        if (!jadwal) return INVALID_ID_SERVICE_RESPONSE;
-
-        jadwal = await prisma.jadwal.update({
-            where: {
-                id,
-            },
-            data,
-        });
-
-        return {
-            status: true,
-            data: jadwal,
-        };
-    } catch (err) {
-        Logger.error(`JadwalService.update : ${err}`);
-        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
-    }
-}
-
-export async function deleteByIds(ids: string): Promise<ServiceResponse<{}>> {
-    try {
-        const idArray: string[] = JSON.parse(ids);
-
-        idArray.forEach(async (id) => {
-            await prisma.jadwal.delete({
-                where: {
-                    id,
+        // First, get the existing meeting
+        const existingMeeting = await prisma.meeting.findUnique({
+            where: { id },
+            include: {
+                jadwal: {
+                    include: {
+                        matakuliah: {
+                            select: {
+                                nama: true,
+                                kode: true,
+                            },
+                        },
+                        shift: {
+                            select: {
+                                startTime: true,
+                                endTime: true,
+                            },
+                        },
+                    },
                 },
-            });
+            },
         });
+
+        if (!existingMeeting) {
+            return INVALID_ID_SERVICE_RESPONSE;
+        }
+
+        // Parse the meeting date (stored as string in YYYY-MM-DD format)
+        const meetingDate = new Date(
+            existingMeeting.tanggal + "T00:00:00.000Z"
+        );
+        const currentDate = new Date();
+
+        // Set current date to start of day for comparison
+        currentDate.setHours(0, 0, 0, 0);
+        meetingDate.setHours(0, 0, 0, 0);
+
+        // Calculate the difference in days
+        const timeDifference = meetingDate.getTime() - currentDate.getTime();
+        const daysDifference = Math.ceil(timeDifference / (1000 * 3600 * 24));
+
+        // Validation: Update must be at least 1 day before the meeting
+        if (daysDifference < 1) {
+            const matakuliahName =
+                existingMeeting.jadwal?.matakuliah?.nama || "Unknown";
+            const meetingInfo = `Meeting ${existingMeeting.pertemuan} - ${matakuliahName}`;
+
+            if (daysDifference < 0) {
+                return BadRequestWithMessage(
+                    `Cannot update ${meetingInfo}. The meeting date (${existingMeeting.tanggal}) has already passed.`
+                );
+            } else if (daysDifference === 0) {
+                return BadRequestWithMessage(
+                    `Cannot update ${meetingInfo}. The meeting is scheduled for today (${existingMeeting.tanggal}). Updates must be made at least 1 day before the meeting date.`
+                );
+            }
+        }
+
+        // If we're updating the tanggal, validate the new date as well
+        if (data.tanggal) {
+            const newMeetingDate = new Date(data.tanggal + "T00:00:00.000Z");
+            newMeetingDate.setHours(0, 0, 0, 0);
+
+            const newTimeDifference =
+                newMeetingDate.getTime() - currentDate.getTime();
+            const newDaysDifference = Math.ceil(
+                newTimeDifference / (1000 * 3600 * 24)
+            );
+
+            if (newDaysDifference < 1) {
+                return BadRequestWithMessage(
+                    `Cannot set meeting date to ${data.tanggal}. The new meeting date must be at least 1 day from today.`
+                );
+            }
+        }
+
+        // Perform the update
+        const updatedMeeting = await prisma.meeting.update({
+            where: { id },
+            data: {
+                ...(data.tanggal && { tanggal: data.tanggal }),
+                ...(data.pertemuan && { pertemuan: data.pertemuan }),
+            },
+            include: {
+                jadwal: {
+                    include: {
+                        matakuliah: {
+                            select: {
+                                nama: true,
+                                kode: true,
+                                sks: true,
+                            },
+                        },
+                        shift: {
+                            select: {
+                                startTime: true,
+                                endTime: true,
+                            },
+                        },
+                        ruangan: {
+                            select: {
+                                nama: true,
+                                lokasi: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        Logger.info(
+            `Meeting updated successfully: ${updatedMeeting.id} - Pertemuan ${updatedMeeting.pertemuan} on ${updatedMeeting.tanggal}`
+        );
 
         return {
             status: true,
-            data: {},
+            data: updatedMeeting,
         };
     } catch (err) {
-        Logger.error(`JadwalService.deleteByIds : ${err}`);
+        Logger.error(`JadwalService.updateMeeting : ${err}`);
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }
@@ -739,29 +817,6 @@ export async function getAvailableSchedule(
 }
 
 /**
- * Diagnostic function to analyze scheduling constraints and provide insights
- * @returns Promise<ServiceResponse<any>> Response containing detailed analysis
- */
-export async function diagnoseScheduling(): Promise<ServiceResponse<any>> {
-    try {
-        const diagnostics =
-            await jadwalGeneticService.diagnoseSchedulingConstraints();
-
-        return {
-            status: true,
-            data: diagnostics,
-        };
-    } catch (err) {
-        Logger.error(`JadwalService.diagnoseScheduling : ${err}`);
-        return {
-            status: false,
-            err: { message: (err as Error).message, code: 500 },
-            data: null,
-        };
-    }
-}
-
-/**
  * Generate schedules for ALL available matakuliah that don't have jadwal yet
  * @param preferredDay - Optional preferred day for scheduling
  * @returns Promise<ServiceResponse<any>> Response containing all generated schedules
@@ -910,36 +965,306 @@ export async function generateAllAvailableSchedules(
     }
 }
 
-export type GetAllMatakuliahResponse = PagedList<Matakuliah[]> | {};
-export async function getAllMatakuliah(
-    filters: FilteringQueryV2
-): Promise<ServiceResponse<GetAllMatakuliahResponse>> {
+export async function getAllParticipantsAndMeetingsByJadwalId(
+    jadwalId: string
+): Promise<ServiceResponse<{}>> {
     try {
-        const usedFilters = buildFilterQueryLimitOffsetV2(filters);
+        // Get all meetings for this jadwal
+        const meetings = await prisma.meeting.findMany({
+            where: {
+                jadwalId: jadwalId,
+            },
+            orderBy: {
+                pertemuan: "asc",
+            },
+        });
 
-        usedFilters.where.isTeori = false;
+        // Get all dosen for this jadwal
+        const dosenList = await prisma.dosen.findMany({
+            where: {
+                jadwalDosen: {
+                    some: {
+                        id: jadwalId,
+                    },
+                },
+            },
+        });
 
-        const [matakuliah, totalData] = await Promise.all([
-            prisma.matakuliah.findMany(usedFilters),
-            prisma.matakuliah.count({
-                where: usedFilters.where,
-            }),
-        ]);
+        // Get all mahasiswa for this jadwal
+        const mahasiswaList = await prisma.mahasiswa.findMany({
+            where: {
+                jadwal: {
+                    some: {
+                        id: jadwalId,
+                    },
+                },
+            },
+        });
 
-        let totalPage = 1;
-        if (totalData > usedFilters.take)
-            totalPage = Math.ceil(totalData / usedFilters.take);
+        // Get all absensi records for this jadwal
+        const absensiRecords = await prisma.absensi.findMany({
+            where: {
+                meeting: {
+                    jadwalId: jadwalId,
+                },
+            },
+            include: {
+                meeting: true,
+            },
+        });
+
+        // Process dosen with their meeting attendance
+        const dosenWithMeetings = dosenList.map((dosen) => {
+            const dosenMeetings = meetings.map((meeting) => {
+                // Find absensi record for this dosen and meeting
+                const absensi = absensiRecords.find(
+                    (record) =>
+                        record.dosenId === dosen.id &&
+                        record.meetingId === meeting.id
+                );
+
+                return {
+                    id: meeting.id,
+                    pertemuan: meeting.pertemuan,
+                    tanggal: meeting.tanggal,
+                    isPresent: absensi?.isPresent,
+                    keterangan: absensi ? absensi.keterangan : null,
+                    waktuAbsen: absensi ? absensi.waktuAbsen : null,
+                };
+            });
+
+            // Calculate total absences and percentage
+            const totalMeetings = meetings.length;
+            const totalAbsent = dosenMeetings.filter(
+                (meeting) => !meeting.isPresent
+            ).length;
+            const percentageAbsent =
+                totalMeetings > 0 ? (totalAbsent / totalMeetings) * 100 : 0;
+
+            return {
+                id: dosen.id,
+                nama: dosen.nama,
+                email: dosen.email,
+                nip: dosen.nip,
+                bidangMinat: dosen.bidangMinat,
+                userLevelId: dosen.userLevelId,
+                type: "dosen",
+                totalAbsent,
+                percentageAbsent: Math.round(percentageAbsent * 100) / 100, // Round to 2 decimal places
+                meetings: dosenMeetings,
+            };
+        });
+
+        // Process mahasiswa with their meeting attendance
+        const mahasiswaWithMeetings = mahasiswaList.map((mahasiswa) => {
+            const mahasiswaMeetings = meetings.map((meeting) => {
+                // Find absensi record for this mahasiswa and meeting
+                const absensi = absensiRecords.find(
+                    (record) =>
+                        record.mahasiswaId === mahasiswa.id &&
+                        record.meetingId === meeting.id
+                );
+
+                return {
+                    id: meeting.id,
+                    pertemuan: meeting.pertemuan,
+                    tanggal: meeting.tanggal,
+                    isPresent: absensi?.isPresent,
+                    keterangan: absensi ? absensi.keterangan : null,
+                    waktuAbsen: absensi ? absensi.waktuAbsen : null,
+                };
+            });
+
+            // Calculate total absences and percentage
+            const totalMeetings = meetings.length;
+            const totalAbsent = mahasiswaMeetings.filter(
+                (meeting) => !meeting.isPresent
+            ).length;
+            const percentageAbsent =
+                totalMeetings > 0 ? (totalAbsent / totalMeetings) * 100 : 0;
+
+            return {
+                id: mahasiswa.id,
+                nama: mahasiswa.nama,
+                npm: mahasiswa.npm,
+                semester: mahasiswa.semester,
+                tahunMasuk: mahasiswa.tahunMasuk,
+                isActive: mahasiswa.isActive,
+                userLevelId: mahasiswa.userLevelId,
+                type: "mahasiswa",
+                totalAbsent,
+                percentageAbsent: Math.round(percentageAbsent * 100) / 100, // Round to 2 decimal places
+                meetings: mahasiswaMeetings,
+            };
+        });
+
+        // Combine dosen first, then mahasiswa
+        const participants = [...dosenWithMeetings, ...mahasiswaWithMeetings];
+
+        return {
+            status: true,
+            data: participants,
+        };
+    } catch (err) {
+        Logger.error(`MeetingService.getListParticipantsByJadwalId : ${err}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
+}
+
+export async function getAbsentNow(
+    user: UserJWTDAO
+): Promise<ServiceResponse<{}>> {
+    try {
+        // Get current time
+        const currentTime = DateTime.now();
+
+        // Get all meetings that are ready for attendance (current time is within the meeting time window)
+        const meetings = await prisma.meeting.findMany({
+            where: {
+                tanggal: currentTime.toFormat("yyyy-MM-dd"),
+                jadwal: {
+                    shift: {
+                        startTime: {
+                            lte: currentTime.toFormat("HH:mm"),
+                        },
+                        endTime: {
+                            gte: currentTime.toFormat("HH:mm"),
+                        },
+                    },
+                    mahasiswa: {
+                        some: {
+                            id: user.id,
+                        },
+                    },
+                    dosen: {
+                        some: {
+                            id: user.id,
+                        },
+                    },
+                },
+            },
+            include: {
+                jadwal: {
+                    include: {
+                        mahasiswa: {
+                            select: {
+                                nama: true,
+                                id: true,
+                                npm: true,
+                            },
+                        },
+                        dosen: {
+                            select: {
+                                id: true,
+                                nama: true,
+                                nip: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!meetings)
+            return BadRequestWithMessage("Belum Ada jadwal yang tersedia!");
 
         return {
             status: true,
             data: {
-                entries: matakuliah,
-                totalData,
-                totalPage,
+                entries: meetings,
             },
         };
     } catch (err) {
-        Logger.error(`JadwalService.getAllMatakuliah : ${err} `);
+        Logger.error(`JadwalService.getAbsentNow : ${err}`);
+
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
+}
+
+export type AbsentResponse = Absensi | {};
+export async function absent(
+    data: AbsentDTO
+): Promise<ServiceResponse<AbsentResponse>> {
+    try {
+        // Check Absent if User is Mahasiswa or Dosen
+        const mahasiswa = await prisma.mahasiswa.findUnique({
+            where: {
+                id: data.userId,
+            },
+        });
+
+        const dosen = await prisma.dosen.findUnique({
+            where: {
+                id: data.userId,
+            },
+        });
+
+        if (!mahasiswa && !dosen)
+            return BadRequestWithMessage("User tidak ditemukan!");
+
+        let absent: Absensi | null = null;
+
+        // Check existing absent record based on user type
+        if (mahasiswa) {
+            // For mahasiswa, use the unique constraint
+            absent = await prisma.absensi.findUnique({
+                where: {
+                    mahasiswaId_meetingId: {
+                        mahasiswaId: data.userId,
+                        meetingId: data.meetingId,
+                    },
+                },
+            });
+        } else if (dosen) {
+            // For dosen, use findFirst since there's no unique constraint
+            absent = await prisma.absensi.findFirst({
+                where: {
+                    dosenId: data.userId,
+                    meetingId: data.meetingId,
+                },
+            });
+        }
+
+        let absensi: Absensi | {} = {};
+
+        // If Absent exists, update the absent
+        if (absent) {
+            absensi = await prisma.absensi.update({
+                where: {
+                    id: absent.id,
+                },
+                data: {
+                    isPresent: data.isPresent,
+                    keterangan: `melakukan absensi pada waktu ${DateTime.now().toFormat(
+                        "dd MMMM yyyy HH:mm:ss"
+                    )}`,
+                    waktuAbsen: DateTime.now().toJSDate(),
+                },
+            });
+        } else {
+            // If Absent doesn't exist, create new absent record
+            const keterangan = `melakukan absensi pada waktu ${DateTime.now().toFormat(
+                "dd MMMM yyyy HH:mm:ss"
+            )}`;
+            absensi = await prisma.absensi.create({
+                data: {
+                    id: ulid(),
+                    mahasiswaId: mahasiswa?.id,
+                    dosenId: dosen?.id,
+                    meetingId: data.meetingId,
+                    isPresent: data.isPresent,
+                    keterangan: keterangan,
+                    waktuAbsen: DateTime.now().toJSDate(),
+                },
+            });
+        }
+
+        return {
+            status: true,
+            data: absensi,
+        };
+    } catch (err) {
+        Logger.error(`JadwalService.Absent : ${err}`);
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }

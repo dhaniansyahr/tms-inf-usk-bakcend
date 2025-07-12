@@ -12,18 +12,11 @@ JadwalRoutes.get(
     JadwalController.getAll
 );
 
+// Absent Now
 JadwalRoutes.get(
-    "/diagnose",
+    "/absent/now",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("JADWAL", "read"),
-    JadwalController.diagnoseScheduling
-);
-
-JadwalRoutes.get(
-    "/mata-kuliah",
-    AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
-    JadwalController.getAllMatakuliah
+    JadwalController.getAbsentNow
 );
 
 JadwalRoutes.get(
@@ -33,6 +26,15 @@ JadwalRoutes.get(
     JadwalController.getById
 );
 
+// Get All Participants and Meetings By Jadwal ID
+JadwalRoutes.get(
+    "/:id/meetings-and-participants",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "read"),
+    JadwalController.getAllParticipantsAndMeetingsByJadwalId
+);
+
+// Create Jadwal
 JadwalRoutes.post(
     "/",
     AuthMiddleware.checkJwt,
@@ -41,6 +43,15 @@ JadwalRoutes.post(
     JadwalController.create
 );
 
+// Absent
+JadwalRoutes.post(
+    "/absent",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "absensi"),
+    JadwalController.absent
+);
+
+// Generate Jadwal
 JadwalRoutes.post(
     "/generate-all",
     AuthMiddleware.checkJwt,
@@ -48,7 +59,14 @@ JadwalRoutes.post(
     JadwalController.generateAllAvailableSchedules
 );
 
-JadwalRoutes.put("/:id", AuthMiddleware.checkJwt, JadwalController.update);
+// Update Meeting
+JadwalRoutes.put(
+    "/meeting/:meetingId",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "update"),
+    JadwalValidation.validateUpdateMeeting,
+    JadwalController.updateMeeting
+);
 
 JadwalRoutes.post(
     "/check",

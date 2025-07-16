@@ -151,6 +151,22 @@ export async function getAbsentNow(c: Context): Promise<TypedResponse> {
     );
 }
 
+export async function getAllScheduleToday(c: Context): Promise<TypedResponse> {
+    const user: UserJWTDAO = c.get("jwtPayload");
+
+    const serviceResponse = await JadwalService.getAllScheduleToday(user);
+
+    if (!serviceResponse.status) {
+        return handleServiceErrorWithResponse(c, serviceResponse);
+    }
+
+    return response_success(
+        c,
+        serviceResponse.data,
+        "Successfully fetched all schedule today!"
+    );
+}
+
 export async function absent(c: Context): Promise<TypedResponse> {
     const data: AbsentDTO = await c.req.json();
 

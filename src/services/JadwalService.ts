@@ -501,6 +501,8 @@ export async function updateMeeting(
         const timeDifference = meetingDate.getTime() - currentDate.getTime();
         const daysDifference = Math.ceil(timeDifference / (1000 * 3600 * 24));
 
+        console.log("Different Days : ", daysDifference);
+
         // Validation: Update must be at least 1 day before the meeting
         if (daysDifference < 1) {
             const matakuliahName =
@@ -519,22 +521,22 @@ export async function updateMeeting(
         }
 
         // If we're updating the tanggal, validate the new date as well
-        if (data.tanggal) {
-            const newMeetingDate = new Date(data.tanggal + "T00:00:00.000Z");
-            newMeetingDate.setHours(0, 0, 0, 0);
+        // if (data.tanggal) {
+        //     const newMeetingDate = new Date(data.tanggal + "T00:00:00.000Z");
+        //     newMeetingDate.setHours(0, 0, 0, 0);
 
-            const newTimeDifference =
-                newMeetingDate.getTime() - currentDate.getTime();
-            const newDaysDifference = Math.ceil(
-                newTimeDifference / (1000 * 3600 * 24)
-            );
+        //     const newTimeDifference =
+        //         newMeetingDate.getTime() - currentDate.getTime();
+        //     const newDaysDifference = Math.ceil(
+        //         newTimeDifference / (1000 * 3600 * 24)
+        //     );
 
-            if (newDaysDifference < 1) {
-                return BadRequestWithMessage(
-                    `Cannot set meeting date to ${data.tanggal}. The new meeting date must be at least 1 day from today.`
-                );
-            }
-        }
+        //     if (newDaysDifference < 1) {
+        //         return BadRequestWithMessage(
+        //             `Cannot set meeting date to ${data.tanggal}. The new meeting date must be at least 1 day from today.`
+        //         );
+        //     }
+        // }
 
         // Perform the update
         const updatedMeeting = await prisma.meeting.update({
@@ -1160,6 +1162,8 @@ export async function getAbsentNow(
                                 nip: true,
                             },
                         },
+                        ruangan: true,
+                        matakuliah: true,
                     },
                 },
             },
@@ -1170,9 +1174,7 @@ export async function getAbsentNow(
 
         return {
             status: true,
-            data: {
-                entries: meetings,
-            },
+            data: meetings,
         };
     } catch (err) {
         Logger.error(`JadwalService.getAbsentNow : ${err}`);
@@ -1265,6 +1267,73 @@ export async function absent(
         };
     } catch (err) {
         Logger.error(`JadwalService.Absent : ${err}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
+}
+
+export async function getAllScheduleToday(
+    user: UserJWTDAO
+): Promise<ServiceResponse<{}>> {
+    try {
+        // Get current time
+        const currentTime = DateTime.now();
+
+        const meetings = await prisma.meeting.findMany({
+            where: {
+                tanggal: currentTime.toFormat("yyyy-MM-dd"),
+                jadwal: {
+                    OR: [
+                        {
+                            mahasiswa: {
+                                some: {
+                                    id: user.id,
+                                },
+                            },
+                        },
+                        {
+                            dosen: {
+                                some: {
+                                    id: user.id,
+                                },
+                            },
+                        },
+                    ],
+                },
+            },
+            include: {
+                jadwal: {
+                    include: {
+                        mahasiswa: {
+                            select: {
+                                nama: true,
+                                id: true,
+                                npm: true,
+                            },
+                        },
+                        dosen: {
+                            select: {
+                                id: true,
+                                nama: true,
+                                nip: true,
+                            },
+                        },
+                        ruangan: true,
+                        matakuliah: true,
+                    },
+                },
+            },
+        });
+
+        if (!meetings || meetings.length === 0)
+            return BadRequestWithMessage("Belum Ada jadwal yang tersedia!");
+
+        return {
+            status: true,
+            data: meetings,
+        };
+    } catch (err) {
+        Logger.error(`JadwalService.getAbsentNow : ${err}`);
+
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }

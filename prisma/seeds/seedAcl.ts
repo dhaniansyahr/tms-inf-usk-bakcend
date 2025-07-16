@@ -86,10 +86,6 @@ export async function seedAcl(prisma: PrismaClient) {
                 },
                 {
                     subject: "JADWAL",
-                    action: ["read", "update", "absensi"],
-                },
-                {
-                    subject: "PENDAFTARAN_ASISTEN_LAB",
                     action: ["read", "update"],
                 },
                 {
@@ -107,7 +103,7 @@ export async function seedAcl(prisma: PrismaClient) {
                 },
                 {
                     subject: "JADWAL",
-                    action: ["read", "absensi"],
+                    action: ["read"],
                 },
                 {
                     subject: "PENDAFTARAN_ASISTEN_LAB",

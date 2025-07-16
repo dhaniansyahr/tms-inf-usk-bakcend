@@ -20,6 +20,12 @@ JadwalRoutes.get(
 );
 
 JadwalRoutes.get(
+    "/today",
+    AuthMiddleware.checkJwt,
+    JadwalController.getAllScheduleToday
+);
+
+JadwalRoutes.get(
     "/:id",
     AuthMiddleware.checkJwt,
     AuthMiddleware.checkAccess("JADWAL", "read"),

@@ -12,6 +12,8 @@ JadwalRoutes.get(
     JadwalController.getAll
 );
 
+JadwalRoutes.delete("/", AuthMiddleware.checkJwt, JadwalController.deleteAll);
+
 // Absent Now
 JadwalRoutes.get(
     "/absent/now",
@@ -49,6 +51,13 @@ JadwalRoutes.post(
     JadwalController.create
 );
 
+JadwalRoutes.put(
+    "/:id",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "create"),
+    JadwalController.updateJadwal
+);
+
 // Absent
 JadwalRoutes.post(
     "/absent",
@@ -63,6 +72,14 @@ JadwalRoutes.post(
     AuthMiddleware.checkJwt,
     AuthMiddleware.checkAccess("JADWAL", "generate"),
     JadwalController.generateAllAvailableSchedules
+);
+
+// Process Excel for Teori Jadwal
+JadwalRoutes.post(
+    "/bulk-upload",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "create"),
+    JadwalController.processExcelForTeoriJadwal
 );
 
 // Update Meeting

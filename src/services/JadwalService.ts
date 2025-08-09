@@ -7,124 +7,23 @@ import {
 } from "$entities/Service";
 import Logger from "$pkg/logger";
 import { prisma } from "$utils/prisma.utils";
-import { Absensi, Jadwal, SEMESTER } from "@prisma/client";
-import { AbsentDTO, JadwalDTO, UpdateMeetingDTO } from "$entities/Jadwal";
+import { Absensi, BIDANG_MINAT, Jadwal, SEMESTER } from "@prisma/client";
+import {
+    AbsentDTO,
+    JadwalDTO,
+    UpdateMeetingDTO,
+    JadwalExcelResult,
+    JadwalExcelRow,
+    UpdateJadwalDTO,
+} from "$entities/Jadwal";
 import { buildFilterQueryLimitOffsetV2 } from "./helpers/FilterQueryV2";
 import { HARI, HARI_LIST, jadwalGeneticService } from "./JadwalGeneticService";
 import { getCurrentAcademicYear, isGanjilSemester } from "$utils/strings.utils";
 import { UserJWTDAO } from "$entities/User";
 import { ulid } from "ulid";
 import { DateTime } from "luxon";
-
-/**
- * Automatically assign students and dosen for practical courses from corresponding theory course
- */
-async function assignStudentsAndDosenForPracticalCourse(
-    matakuliahId: string,
-    kelas?: string
-): Promise<{ mahasiswaIds: string[]; dosenIds: string[] }> {
-    try {
-        // Get practical course details
-        const praktikumMatakuliah = await prisma.matakuliah.findUnique({
-            where: { id: matakuliahId },
-        });
-
-        if (!praktikumMatakuliah) return { mahasiswaIds: [], dosenIds: [] };
-
-        // Find corresponding theory course by removing "PRAKTIKUM" from name
-        const theoryCourseName = praktikumMatakuliah.nama
-            .replace(/\s*PRAKTIKUM\s*/i, "")
-            .trim();
-        console.log(theoryCourseName);
-
-        const theoryMatakuliah = await prisma.matakuliah.findFirst({
-            where: {
-                nama: theoryCourseName,
-                isTeori: true,
-                semester: praktikumMatakuliah.semester,
-            },
-        });
-
-        if (!theoryMatakuliah) {
-            Logger.warn(
-                `No corresponding theory course found for: ${praktikumMatakuliah.nama}`
-            );
-            return { mahasiswaIds: [], dosenIds: [] };
-        }
-
-        // Get current semester and year
-        const currentSemester = isGanjilSemester()
-            ? SEMESTER.GENAP
-            : SEMESTER.GANJIL;
-        const currentYear = getCurrentAcademicYear();
-
-        // Find students and dosen enrolled in the theory course for current semester
-        const theoryJadwal = await prisma.jadwal.findMany({
-            where: {
-                matakuliahId: theoryMatakuliah.id,
-                semester: currentSemester,
-                tahun: currentYear,
-                deletedAt: null,
-            },
-            include: {
-                mahasiswa: true,
-                dosen: true,
-            },
-        });
-
-        if (theoryJadwal.length === 0) {
-            Logger.warn(
-                `No theory course schedule found for: ${theoryMatakuliah.nama}`
-            );
-            return { mahasiswaIds: [], dosenIds: [] };
-        }
-
-        // Collect all students from theory course schedules
-        const theoryStudents = theoryJadwal.flatMap(
-            (jadwal) => jadwal.mahasiswa
-        );
-
-        // Remove duplicates based on student ID
-        const uniqueStudents = theoryStudents.filter(
-            (student, index, self) =>
-                index === self.findIndex((s) => s.id === student.id)
-        );
-
-        // For practical courses, maximum 25 students per class
-        const maxStudentsPerClass = 25;
-        const shuffled = uniqueStudents.sort(() => 0.5 - Math.random());
-        const selectedStudents = shuffled.slice(0, maxStudentsPerClass);
-
-        // Collect all dosen from theory course schedules
-        const theoryDosen = theoryJadwal.flatMap((jadwal) => jadwal.dosen);
-
-        // Remove duplicates based on dosen ID
-        const uniqueDosen = theoryDosen.filter(
-            (dosen, index, self) =>
-                index === self.findIndex((d) => d.id === dosen.id)
-        );
-
-        Logger.info(
-            `Assigned ${selectedStudents.length} students and ${
-                uniqueDosen.length
-            } dosen from theory course "${
-                theoryMatakuliah.nama
-            }" to practical course: ${praktikumMatakuliah.nama} ${
-                kelas ? `- Kelas ${kelas}` : ""
-            }`
-        );
-
-        return {
-            mahasiswaIds: selectedStudents.map((s) => s.id),
-            dosenIds: uniqueDosen.map((d) => d.id),
-        };
-    } catch (error) {
-        Logger.error(
-            `Error assigning students and dosen for practical course: ${error}`
-        );
-        return { mahasiswaIds: [], dosenIds: [] };
-    }
-}
+import bcrypt from "bcrypt";
+import { createMeetingDates, hasConflict } from "./helpers/jadwal";
 
 export type CreateResponse = Jadwal | {};
 export async function create(
@@ -140,45 +39,27 @@ export async function create(
             return BadRequestWithMessage("Matakuliah tidak ditemukan!");
         }
 
-        // Automatically assign students and dosen if not provided
-        let assignedMahasiswaIds = data.mahasiswaIds || [];
-        let assignedDosenIds = data.dosenIds || [];
-
-        if (assignedMahasiswaIds.length === 0) {
-            // Determine if this is a theory or practical course
-            const isTheoryCourse = matakuliah.isTeori === true;
-            const isPracticalCourse =
-                matakuliah.isTeori === false ||
-                matakuliah.nama.toUpperCase().includes("PRAKTIKUM");
-
-            if (isTheoryCourse) {
-                return BadRequestWithMessage(
-                    "Tidak dapat membuat jadwal untuk mata kuliah teori!"
-                );
-            }
-
-            if (isPracticalCourse) {
-                // Automatically assign students and dosen from corresponding theory course
-                const practicalAssignment =
-                    await assignStudentsAndDosenForPracticalCourse(
-                        data.matakuliahId,
-                        data.kelas
-                    );
-                assignedMahasiswaIds = practicalAssignment.mahasiswaIds;
-
-                // Only auto-assign dosen if not provided
-                if (assignedDosenIds.length === 0) {
-                    assignedDosenIds = practicalAssignment.dosenIds;
-                    Logger.info(
-                        `Auto-assigned ${assignedDosenIds.length} dosen from theory course for practical course: ${matakuliah.nama}`
-                    );
-                }
-
-                Logger.info(
-                    `Auto-assigned ${assignedMahasiswaIds.length} students for practical course: ${matakuliah.nama}`
-                );
-            }
+        let namaTeori = matakuliah.nama;
+        if (namaTeori.toUpperCase().startsWith("PRAKTIKUM ")) {
+            namaTeori = namaTeori.substring("PRAKTIKUM ".length);
         }
+
+        // Cari matakuliah teori berdasarkan nama yang sudah diambil
+        const findTeoriMK = await prisma.jadwal.findFirst({
+            where: {
+                matakuliah: {
+                    nama: namaTeori,
+                },
+            },
+            include: {
+                dosen: true,
+            },
+        });
+
+        if (!findTeoriMK)
+            return BadRequestWithMessage(
+                "Matakuliah teori untuk mk tersebut tidak ditemukan!"
+            );
 
         const existingSchedules =
             await jadwalGeneticService.getExistingSchedules();
@@ -191,21 +72,18 @@ export async function create(
             matakuliahId: data.matakuliahId,
             ruanganId: data.ruanganId,
             shiftId: data.shiftId,
-            dosenIds: assignedDosenIds,
+            dosenIds: findTeoriMK.dosen.map((dosen) => dosen.id),
             hari: data.hari,
             semester: isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL,
             tahun: getCurrentAcademicYear(),
-            mahasiswaIds: assignedMahasiswaIds,
             asistenLabIds: data.asistenLabIds || [],
             fitness: 0,
         };
 
-        const isConflict = jadwalGeneticService.hasScheduleConflicts(
-            scheduleForValidation,
-            existingSchedules
-        );
+        // Use the detailed conflict checker from helpers/jadwal.ts
+        const conflictList = await hasConflict(scheduleForValidation);
 
-        if (isConflict) {
+        if (conflictList && conflictList.length > 0) {
             if (!data.isOverride)
                 return {
                     status: false,
@@ -213,49 +91,35 @@ export async function create(
                         message: "Terjadi Konflik dengan jadwal lainnya!",
                         code: 409,
                     },
+                    data: conflictList,
                 };
         }
 
         const { dosenIds, mahasiswaIds, asistenLabIds, ...jadwalData } = data;
 
+        // Create jadwal
         const jadwal = await prisma.jadwal.create({
             data: {
                 ...jadwalData,
                 semester: isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL,
                 tahun: getCurrentAcademicYear(),
                 dosen: {
-                    connect: assignedDosenIds.map((dosenId) => ({
-                        id: dosenId,
+                    connect: findTeoriMK.dosen.map((dosen) => ({
+                        id: dosen.id,
                     })),
                 },
-                mahasiswa: {
-                    connect: assignedMahasiswaIds.map((mahasiswaId) => ({
-                        id: mahasiswaId,
-                    })),
-                },
-                asisten: {
-                    connect: (asistenLabIds || []).map((asistenId) => ({
-                        id: asistenId,
-                    })),
-                },
-            },
-            include: {
-                dosen: true,
-                mahasiswa: true,
-                asisten: true,
-                matakuliah: true,
-                ruangan: true,
-                shift: true,
-                Meeting: true,
             },
         });
 
-        const meetingDates = await jadwalGeneticService.generateMeetingDates(
-            jadwal.id,
-            12
-        );
+        // Generate meeting dates and create meeting records
+        const meetingDates = await createMeetingDates(jadwal.id);
 
-        // Create meeting records
+        // Delete old meetings if any (defensive, in case of re-creation)
+        await prisma.meeting.deleteMany({
+            where: { jadwalId: jadwal.id },
+        });
+
+        // Create new meeting records
         await Promise.all(
             meetingDates.map((dateStr, index) =>
                 prisma.meeting.create({
@@ -269,9 +133,24 @@ export async function create(
             )
         );
 
+        // Return jadwal after updating/creating meetings
+        const jadwalAfterMeeting = await prisma.jadwal.findUnique({
+            where: { id: jadwal.id },
+            include: {
+                dosen: true,
+                mahasiswa: true,
+                asisten: true,
+                matakuliah: true,
+                ruangan: true,
+                shift: true,
+                Meeting: true,
+            },
+        });
+
+        // If for some reason jadwalAfterMeeting is null, return empty object
         return {
             status: true,
-            data: jadwal,
+            data: jadwalAfterMeeting ?? {},
         };
     } catch (err) {
         Logger.error(`JadwalService.create : ${err}`);
@@ -450,6 +329,105 @@ export async function getById(
         };
     } catch (err) {
         Logger.error(`JadwalService.getById : ${err}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
+}
+
+export type UpdateJadwalResponse = Jadwal | {};
+export async function UpdateJadwal(
+    id: string,
+    data: UpdateJadwalDTO
+): Promise<ServiceResponse<UpdateJadwalResponse>> {
+    try {
+        // Ambil jadwal beserta semua meeting-nya
+        const jadwal = await prisma.jadwal.findUnique({
+            where: { id },
+            include: {
+                Meeting: {
+                    orderBy: { pertemuan: "asc" },
+                },
+            },
+        });
+
+        if (!jadwal) {
+            return BadRequestWithMessage(
+                "Jadwal yang ingin anda perbaharui tidak ditemukan"
+            );
+        }
+
+        // Ambil pertemuan pertama
+        const firstMeeting =
+            jadwal.Meeting && jadwal.Meeting.length > 0
+                ? jadwal.Meeting[0]
+                : null;
+        if (!firstMeeting) {
+            return BadRequestWithMessage(
+                "Jadwal belum memiliki pertemuan, tidak dapat diupdate."
+            );
+        }
+
+        // Cek apakah jadwal sudah dimulai (pertemuan pertama sudah lewat/hari ini)
+        const today = DateTime.now().startOf("day");
+        const firstMeetingDate = DateTime.fromISO(firstMeeting.tanggal).startOf(
+            "day"
+        );
+
+        if (today >= firstMeetingDate) {
+            return BadRequestWithMessage(
+                "Jadwal tidak dapat diubah karena sudah dimulai."
+            );
+        }
+
+        // Update jadwal (shiftId dan hari)
+        const updatedJadwal = await prisma.jadwal.update({
+            where: { id },
+            data: {
+                shiftId: data.shiftId,
+                hari: data.hari,
+            },
+        });
+
+        const meetingDates = await createMeetingDates(updatedJadwal.id);
+
+        // Delete old meetings if any (defensive, in case of re-creation)
+        await prisma.meeting.deleteMany({
+            where: { jadwalId: updatedJadwal.id },
+        });
+
+        // Create new meeting records
+        await Promise.all(
+            meetingDates.map((dateStr, index) =>
+                prisma.meeting.create({
+                    data: {
+                        id: ulid(),
+                        jadwalId: updatedJadwal.id,
+                        tanggal: dateStr, // Using string instead of Date
+                        pertemuan: index + 1,
+                    },
+                })
+            )
+        );
+
+        // Ambil jadwal terbaru beserta relasi
+        const resultJadwal = await prisma.jadwal.findUnique({
+            where: { id: updatedJadwal.id },
+            include: {
+                dosen: true,
+                mahasiswa: true,
+                asisten: true,
+                matakuliah: true,
+                ruangan: true,
+                shift: true,
+                Meeting: true,
+            },
+        });
+
+        return {
+            status: true,
+            data: resultJadwal || {},
+        };
+    } catch (error) {
+        Logger.error(`JadwalService.UpdateJadwal : ${error}`);
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }
@@ -1334,6 +1312,516 @@ export async function getAllScheduleToday(
     } catch (err) {
         Logger.error(`JadwalService.getAbsentNow : ${err}`);
 
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
+}
+
+async function readExcelFile(file: File): Promise<JadwalExcelRow[]> {
+    const XLSX = await import("xlsx");
+
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(new Uint8Array(arrayBuffer), {
+        type: "array",
+    });
+
+    // Get first sheet
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+
+    // Convert to JSON
+    const excelData = XLSX.utils.sheet_to_json<JadwalExcelRow>(worksheet);
+
+    return excelData;
+}
+
+export async function processExcelForTeoriJadwal(
+    file: File
+): Promise<ServiceResponse<{}>> {
+    try {
+        // Read File Excel
+        const excelData = await readExcelFile(file);
+
+        if (excelData.length === 0) {
+            return BadRequestWithMessage(
+                "Tidak ada data dalam file tersebut, silakan cek kembali file yang anda masukan"
+            );
+        }
+
+        const result: JadwalExcelResult = {
+            totalRows: excelData.length,
+            processedRows: 0,
+            successCount: 0,
+            errorCount: 0,
+            errors: [],
+            createdSchedules: [],
+        };
+
+        // Process each row
+        for (let i = 0; i < excelData.length; i++) {
+            const row = excelData[i];
+            result.processedRows++;
+
+            try {
+                // Validate required fields
+                if (
+                    !row.Kode ||
+                    !row.Nama ||
+                    !row.Kelas ||
+                    !row["Koordinator Kelas"] ||
+                    !row.Ruang ||
+                    !row.Hari ||
+                    !row.Waktu
+                ) {
+                    result.errors.push({
+                        row: i + 1,
+                        message: "Missing required fields",
+                        data: row,
+                    });
+                    result.errorCount++;
+                    continue;
+                }
+
+                // Find matakuliah by kode and check if it's TEORI
+                const matakuliah = await prisma.matakuliah.findFirst({
+                    where: {
+                        kode: row.Kode.trim(),
+                        isTeori: true,
+                    },
+                });
+
+                if (!matakuliah) {
+                    Logger.error(
+                        `JadwalService.ProcessExcelForTeoriJadwal : Matakuliah with kode '${row.Kode}' not found or is not TEORI`
+                    );
+                    continue;
+                }
+
+                // Extract NIP and name from KOORDINATOR_KELAS field
+                // Format: "Name, S.Kom., M.ScNIP. 19930407..."
+                const coordinatorText = row["Koordinator Kelas"].trim();
+                const nipMatch = coordinatorText.match(/NIP\.\s*(\d+)/);
+
+                if (!nipMatch) {
+                    Logger.error(
+                        `JadwalService.ProcessExcelForTeoriJadwal : Could not extract NIP from Koordinator Kelas: '${coordinatorText}'`
+                    );
+                    continue;
+                }
+
+                const dosenNip = nipMatch[1];
+
+                // Extract name from the beginning of the text (before NIP)
+                const nameMatch = coordinatorText.match(/^([^NIP]+)/);
+                const dosenName = nameMatch
+                    ? nameMatch[1].trim().replace(/,\s*$/, "")
+                    : "";
+
+                // Find dosen by NIP first
+                let dosen = await prisma.dosen.findUnique({
+                    where: {
+                        nip: dosenNip,
+                    },
+                });
+
+                if (!dosen) {
+                    // If not found by NIP, try to find by name and update NIP
+                    const dosenNameExist = await prisma.dosen.findFirst({
+                        where: {
+                            nama: {
+                                contains: dosenName.split(",")[0].trim(),
+                            },
+                        },
+                    });
+
+                    if (dosenNameExist) {
+                        // Update the dosen's NIP
+                        try {
+                            dosen = await prisma.dosen.update({
+                                where: { id: dosenNameExist.id },
+                                data: { nip: dosenNip },
+                            });
+                            Logger.info(
+                                `Updated NIP for dosen ${dosenNameExist.nama} to ${dosenNip}`
+                            );
+                        } catch (updateError) {
+                            Logger.error(
+                                `JadwalService.ProcessExcelForTeoriJadwal : Failed to update NIP for dosen '${
+                                    dosenNameExist.nama
+                                } : ${(updateError as Error).message}`
+                            );
+
+                            continue;
+                        }
+                    } else {
+                        // If dosen is still not found, create a new one
+                        const userLevel = await prisma.userLevels.findFirst({
+                            where: {
+                                name: "DOSEN",
+                            },
+                        });
+
+                        try {
+                            await prisma.dosen.create({
+                                data: {
+                                    id: ulid(),
+                                    nama: dosenName,
+                                    nip: dosenNip,
+                                    email:
+                                        dosenName
+                                            .split(",")[0]
+                                            .trim()
+                                            .toLowerCase() + "@gmail.com",
+                                    password: await bcrypt.hash(
+                                        dosenName
+                                            .split(",")[0]
+                                            .trim()
+                                            .toLowerCase(),
+                                        10
+                                    ),
+                                    bidangMinat: BIDANG_MINAT.UMUM,
+                                    userLevel: {
+                                        connect: {
+                                            id: userLevel?.id,
+                                        },
+                                    },
+                                },
+                            });
+                        } catch (createError) {
+                            Logger.error(
+                                `JadwalService.ProcessExcelForTeoriJadwal : Failed to create dosen with NIP '${dosenNip}`
+                            );
+                            continue;
+                        }
+                    }
+                }
+
+                if (!dosen) {
+                    result.errors.push({
+                        row: i + 1,
+                        message: `Dosen with NIP '${dosenNip}' or name '${dosenName}' not found`,
+                        data: row,
+                    });
+                    result.errorCount++;
+                    continue;
+                }
+
+                // Find ruangan by nama - if not found, create it
+                let ruangan = await prisma.ruanganLaboratorium.findFirst({
+                    where: {
+                        nama: {
+                            contains: row.Ruang.trim(),
+                        },
+                    },
+                });
+
+                if (!ruangan) {
+                    // Create new ruangan
+                    try {
+                        ruangan = await prisma.ruanganLaboratorium.create({
+                            data: {
+                                id: ulid(),
+                                nama: row.Ruang.trim(),
+                                lokasi: "Auto-generated from Excel",
+                                isActive: true,
+                            },
+                        });
+                        Logger.info(`Created new ruangan: ${row.Ruang.trim()}`);
+                    } catch (createError) {
+                        result.errors.push({
+                            row: i + 1,
+                            message: `Failed to create ruangan '${
+                                row.Ruang
+                            }': ${(createError as Error).message}`,
+                            data: row,
+                        });
+                        result.errorCount++;
+                        continue;
+                    }
+                }
+
+                // Find shift by time (assuming format like "08.00-09.40")
+                const shift = await prisma.shift.findFirst({
+                    where: {
+                        OR: [
+                            {
+                                startTime: {
+                                    contains: row.Waktu.trim()
+                                        .split("-")[0]
+                                        ?.trim(),
+                                },
+                            },
+                            {
+                                endTime: {
+                                    contains: row.Waktu.trim()
+                                        .split("-")[1]
+                                        ?.trim(),
+                                },
+                            },
+                        ],
+                    },
+                });
+
+                if (!shift) {
+                    result.errors.push({
+                        row: i + 1,
+                        message: `Shift '${row.Waktu}' not found`,
+                        data: row,
+                    });
+                    result.errorCount++;
+                    continue;
+                }
+
+                // Validate hari and convert Indonesian to English format
+                const indonesianToEnglishDay: Record<string, HARI> = {
+                    senin: "SENIN",
+                    selasa: "SELASA",
+                    rabu: "RABU",
+                    kamis: "KAMIS",
+                    jumat: "JUMAT",
+                    sabtu: "SABTU",
+                    SENIN: "SENIN",
+                    SELASA: "SELASA",
+                    RABU: "RABU",
+                    KAMIS: "KAMIS",
+                    JUMAT: "JUMAT",
+                    SABTU: "SABTU",
+                };
+
+                const rawHari = row.Hari.trim();
+                const hari =
+                    indonesianToEnglishDay[rawHari.toLowerCase()] ||
+                    rawHari.toUpperCase();
+
+                Logger.info(`Hari conversion: "${rawHari}" -> "${hari}"`);
+
+                if (!HARI_LIST.includes(hari as HARI)) {
+                    result.errors.push({
+                        row: i + 1,
+                        message: `Invalid hari '${
+                            row.Hari
+                        }'. Must be one of: ${HARI_LIST.join(", ")}`,
+                        data: row,
+                    });
+                    result.errorCount++;
+                    continue;
+                }
+
+                // Check if schedule already exists for this matakuliah
+                const existingSchedule = await prisma.jadwal.findFirst({
+                    where: {
+                        matakuliahId: matakuliah.id,
+                        semester: isGanjilSemester()
+                            ? SEMESTER.GENAP
+                            : SEMESTER.GANJIL,
+                        tahun: getCurrentAcademicYear(),
+                        deletedAt: null,
+                    },
+                });
+
+                if (existingSchedule) {
+                    result.successCount++;
+                    continue;
+                }
+
+                // Create the jadwal
+                const jadwalData: JadwalDTO = {
+                    id: ulid(),
+                    matakuliahId: matakuliah.id,
+                    dosenIds: [dosen.id],
+                    ruanganId: ruangan.id,
+                    shiftId: shift.id,
+                    hari: hari as HARI,
+                    kelas: row.Kelas?.trim(),
+                    isOverride: false,
+                };
+
+                // Use existing create function
+                const createResult = await createTeori(jadwalData);
+
+                if (!createResult.status) {
+                    result.errors.push({
+                        row: i + 1,
+                        message: `Failed to create schedule: ${createResult.err?.message}`,
+                        data: row,
+                    });
+                    result.errorCount++;
+                    continue;
+                }
+
+                // Add to success list
+                result.createdSchedules.push({
+                    matakuliahKode: matakuliah.kode,
+                    matakuliahNama: matakuliah.nama,
+                    dosenNama: dosen.nama,
+                    ruanganNama: ruangan.nama,
+                    shiftTime: `${shift.startTime}-${shift.endTime}`,
+                    hari: hari,
+                    kelas: row.Kelas,
+                });
+
+                result.successCount++;
+
+                Logger.info(
+                    `Successfully created schedule for ${matakuliah.nama} with dosen ${dosen.nama}`
+                );
+            } catch (rowError) {
+                Logger.error(`Error processing row ${i + 1}: ${rowError}`);
+                result.errors.push({
+                    row: i + 1,
+                    message: `Unexpected error: ${(rowError as Error).message}`,
+                    data: row,
+                });
+                result.errorCount++;
+            }
+        }
+
+        Logger.info(
+            `Excel processing completed. Success: ${result.successCount}, Errors: ${result.errorCount}`
+        );
+
+        return {
+            status: true,
+            data: result,
+        };
+    } catch (err) {
+        Logger.error(`JadwalService.processExcelForTeoriJadwal : ${err}`);
+        return {
+            status: false,
+            err: {
+                message: "Internal server error",
+                code: 500,
+            },
+        } as ServiceResponse<JadwalExcelResult>;
+    }
+}
+
+export type CreateTeoriResponse = Jadwal | {};
+export async function createTeori(
+    data: JadwalDTO
+): Promise<ServiceResponse<CreateResponse>> {
+    try {
+        // Get matakuliah details to determine course type
+        const matakuliah = await prisma.matakuliah.findUnique({
+            where: { id: data.matakuliahId },
+        });
+
+        if (!matakuliah) {
+            return BadRequestWithMessage("Matakuliah tidak ditemukan!");
+        }
+
+        // Automatically assign students and dosen if not provided
+        let assignedMahasiswaIds = data.mahasiswaIds || [];
+        let assignedDosenIds = data.dosenIds || [];
+
+        const existingSchedules =
+            await jadwalGeneticService.getExistingSchedules();
+
+        if (!existingSchedules)
+            return BadRequestWithMessage("Tidak ada Jadwal yang ditemukan!");
+
+        const scheduleForValidation = {
+            id: data.id,
+            matakuliahId: data.matakuliahId,
+            ruanganId: data.ruanganId,
+            shiftId: data.shiftId,
+            dosenIds: assignedDosenIds,
+            hari: data.hari,
+            semester: isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL,
+            tahun: getCurrentAcademicYear(),
+            mahasiswaIds: assignedMahasiswaIds,
+            asistenLabIds: data.asistenLabIds || [],
+            fitness: 0,
+        };
+
+        const isConflict = jadwalGeneticService.hasScheduleConflicts(
+            scheduleForValidation,
+            existingSchedules
+        );
+
+        if (isConflict) {
+            if (!data.isOverride)
+                return {
+                    status: false,
+                    err: {
+                        message: "Terjadi Konflik dengan jadwal lainnya!",
+                        code: 409,
+                    },
+                };
+        }
+
+        const { dosenIds, mahasiswaIds, asistenLabIds, ...jadwalData } = data;
+
+        const jadwal = await prisma.jadwal.create({
+            data: {
+                ...jadwalData,
+                semester: isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL,
+                tahun: getCurrentAcademicYear(),
+                dosen: {
+                    connect: assignedDosenIds.map((dosenId) => ({
+                        id: dosenId,
+                    })),
+                },
+                mahasiswa: {
+                    connect: assignedMahasiswaIds.map((mahasiswaId) => ({
+                        id: mahasiswaId,
+                    })),
+                },
+                asisten: {
+                    connect: (asistenLabIds || []).map((asistenId) => ({
+                        id: asistenId,
+                    })),
+                },
+            },
+            include: {
+                dosen: true,
+                mahasiswa: true,
+                asisten: true,
+                matakuliah: true,
+                ruangan: true,
+                shift: true,
+                Meeting: true,
+            },
+        });
+
+        const meetingDates = await jadwalGeneticService.generateMeetingDates(
+            jadwal.id,
+            12
+        );
+
+        // Create meeting records
+        await Promise.all(
+            meetingDates.map((dateStr, index) =>
+                prisma.meeting.create({
+                    data: {
+                        id: ulid(),
+                        jadwalId: jadwal.id,
+                        tanggal: dateStr, // Using string instead of Date
+                        pertemuan: index + 1,
+                    },
+                })
+            )
+        );
+
+        return {
+            status: true,
+            data: jadwal,
+        };
+    } catch (err) {
+        Logger.error(`JadwalService.create : ${err}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
+}
+
+export async function deleteAll(): Promise<ServiceResponse<{}>> {
+    try {
+        await prisma.jadwal.deleteMany();
+
+        return {
+            status: true,
+            data: {},
+        };
+    } catch (error) {
+        Logger.error(`JadwalService.DeleteAll : ${error}`);
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }

@@ -8,21 +8,20 @@ import { seedMataKuliah } from "./seedMataKuliah";
 import { seedMahasiswa } from "./seedMahasiswa";
 import { seedDosen } from "./seedDosen";
 import { seedAcl } from "./seedAcl";
-import { seedJadwal } from "./seedJadwal";
 
 async function seed() {
-        await seedUserLevels(prisma);
-        await seedUsers(prisma);
-        await seedMahasiswa(prisma);
-        await seedDosen(prisma);
-        await seedShift(prisma);
-        await seedAcl(prisma);
-        await seedRuangan(prisma);
-        await seedRuanganLab(prisma);
-        await seedMataKuliah(prisma);
-        await seedJadwal(prisma);
+    await seedUserLevels(prisma);
+    await seedUsers(prisma);
+    await seedMahasiswa(prisma);
+    await seedDosen(prisma);
+    await seedShift(prisma);
+    await seedAcl(prisma);
+    await seedRuangan(prisma);
+    await seedRuanganLab(prisma);
+    await seedMataKuliah(prisma);
+    // await seedJadwal(prisma);
 }
 
 seed().then(() => {
-        console.log("ALL SEEDING DONE");
+    console.log("ALL SEEDING DONE");
 });

@@ -14,6 +14,12 @@ JadwalRoutes.get(
 
 JadwalRoutes.delete("/", AuthMiddleware.checkJwt, JadwalController.deleteAll);
 
+JadwalRoutes.get(
+    "/check-jadwal-teori",
+    AuthMiddleware.checkJwt,
+    JadwalController.checkHasJadwalTeori
+);
+
 // Absent Now
 JadwalRoutes.get(
     "/absent/now",

@@ -498,24 +498,6 @@ export async function updateMeeting(
             }
         }
 
-        // If we're updating the tanggal, validate the new date as well
-        // if (data.tanggal) {
-        //     const newMeetingDate = new Date(data.tanggal + "T00:00:00.000Z");
-        //     newMeetingDate.setHours(0, 0, 0, 0);
-
-        //     const newTimeDifference =
-        //         newMeetingDate.getTime() - currentDate.getTime();
-        //     const newDaysDifference = Math.ceil(
-        //         newTimeDifference / (1000 * 3600 * 24)
-        //     );
-
-        //     if (newDaysDifference < 1) {
-        //         return BadRequestWithMessage(
-        //             `Cannot set meeting date to ${data.tanggal}. The new meeting date must be at least 1 day from today.`
-        //         );
-        //     }
-        // }
-
         // Perform the update
         const updatedMeeting = await prisma.meeting.update({
             where: { id },
@@ -1822,6 +1804,28 @@ export async function deleteAll(): Promise<ServiceResponse<{}>> {
         };
     } catch (error) {
         Logger.error(`JadwalService.DeleteAll : ${error}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
+}
+export async function checkHasJadwalTeori(): Promise<ServiceResponse<{}>> {
+    try {
+        const jadwalTeori = await prisma.jadwal.findMany({
+            where: {
+                matakuliah: {
+                    isTeori: true,
+                },
+            },
+        });
+
+        if (!jadwalTeori)
+            return BadRequestWithMessage("Belum ada Jadwal Teori!");
+
+        return {
+            status: true,
+            data: jadwalTeori.length > 0,
+        };
+    } catch (error) {
+        Logger.error(`JadwalService.checkHasJadwalTeori : ${error}`);
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }

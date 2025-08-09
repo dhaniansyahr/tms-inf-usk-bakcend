@@ -222,6 +222,20 @@ export async function deleteAll(c: Context): Promise<TypedResponse> {
     );
 }
 
+export async function checkHasJadwalTeori(c: Context): Promise<TypedResponse> {
+    const serviceResponse = await JadwalService.checkHasJadwalTeori();
+
+    if (!serviceResponse.status) {
+        return handleServiceErrorWithResponse(c, serviceResponse);
+    }
+
+    return response_created(
+        c,
+        serviceResponse.data,
+        "Successfully check jadwal teori!"
+    );
+}
+
 export async function processExcelForTeoriJadwal(
     c: Context
 ): Promise<TypedResponse> {

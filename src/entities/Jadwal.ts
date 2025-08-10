@@ -36,6 +36,7 @@ export interface UpdateMeetingDTO {
 export interface UpdateJadwalDTO {
     hari: HARI;
     shiftId: string;
+    isOverride?: boolean;
 }
 
 export interface AbsentDTO {

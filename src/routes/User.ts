@@ -31,7 +31,7 @@ UserRoutes.put(
     "/:id",
     AuthMiddleware.checkJwt,
     AuthMiddleware.checkAccess("MASTER_DATA", "update"),
-    UserValidation.validateUser,
+    UserValidation.validateUserUpdate,
     UserController.update
 );
 

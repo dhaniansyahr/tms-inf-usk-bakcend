@@ -215,7 +215,7 @@ model Jadwal {
   ruanganId    String
   semester     SEMESTER
   tahun        String
-  isOverride   Boolean?
+  isOverride   Boolean   @default(false)
   kelas        String?
   matakuliahId String
   createdAt    DateTime  @default(now())
@@ -231,6 +231,16 @@ model Jadwal {
   mahasiswa             Mahasiswa[]
   Meeting               Meeting[]
   PendaftaranAsistenLab PendaftaranAsistenLab[]
+  OverrideData          OverrideJadwal[]
+}
+
+model OverrideJadwal {
+  id        String   @id
+  message   String   @db.LongText
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Jadwal    Jadwal?  @relation(fields: [jadwalId], references: [id])
+  jadwalId  String?
 }
 
 model Meeting {

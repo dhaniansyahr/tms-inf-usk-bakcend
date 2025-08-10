@@ -111,6 +111,19 @@ export async function create(
             },
         });
 
+        // Connect Konflik Data to jadwal for save the data
+        if (conflictList && data.isOverride) {
+            for (const conflict of conflictList) {
+                await prisma.overrideJadwal.create({
+                    data: {
+                        id: ulid(),
+                        message: conflict.message,
+                        jadwalId: jadwal.id,
+                    },
+                });
+            }
+        }
+
         // Generate meeting dates and create meeting records
         const meetingDates = await createMeetingDates(jadwal.id);
 
@@ -211,6 +224,7 @@ export async function getAll(
                     },
                 },
             },
+            OverrideData: true,
         };
 
         // Build base where conditions
@@ -318,6 +332,7 @@ export async function getById(
                     },
                 },
                 matakuliah: true,
+                OverrideData: true,
             },
         });
 
@@ -346,6 +361,7 @@ export async function UpdateJadwal(
                 Meeting: {
                     orderBy: { pertemuan: "asc" },
                 },
+                dosen: true,
             },
         });
 
@@ -353,6 +369,37 @@ export async function UpdateJadwal(
             return BadRequestWithMessage(
                 "Jadwal yang ingin anda perbaharui tidak ditemukan"
             );
+        }
+
+        const existingSchedules =
+            await jadwalGeneticService.getExistingSchedules();
+
+        if (!existingSchedules)
+            return BadRequestWithMessage("Tidak ada Jadwal yang ditemukan!");
+
+        const jadwalValidation = {
+            id: id,
+            matakuliahId: jadwal.matakuliahId,
+            ruanganId: jadwal.ruanganId,
+            shiftId: data.shiftId,
+            dosenIds: jadwal.dosen?.map((dosen) => dosen.id),
+            hari: data.hari,
+            semester: jadwal.semester,
+            tahun: jadwal.tahun,
+        };
+
+        const conflictList = await hasConflict(jadwalValidation);
+
+        if (conflictList && conflictList.length > 0) {
+            if (!data.isOverride)
+                return {
+                    status: false,
+                    err: {
+                        message: "Terjadi Konflik dengan jadwal lainnya!",
+                        code: 409,
+                    },
+                    data: conflictList,
+                };
         }
 
         // Ambil pertemuan pertama
@@ -386,6 +433,25 @@ export async function UpdateJadwal(
                 hari: data.hari,
             },
         });
+
+        // Hapus override lama terlebih dahulu, lalu buat yang baru
+        if (conflictList && data.isOverride) {
+            // 1. Hapus override data lama
+            await prisma.overrideJadwal.deleteMany({
+                where: { jadwalId: id },
+            });
+
+            // 2. Buat override data baru berdasarkan konflik terbaru
+            for (const conflict of conflictList) {
+                await prisma.overrideJadwal.create({
+                    data: {
+                        id: ulid(),
+                        message: conflict.message,
+                        jadwalId: updatedJadwal.id,
+                    },
+                });
+            }
+        }
 
         const meetingDates = await createMeetingDates(updatedJadwal.id);
 
@@ -779,7 +845,8 @@ export async function getAvailableSchedule(
 }
 
 /**
- * Generate schedules for ALL available matakuliah that don't have jadwal yet
+ * Generate schedules for ALL available practical matakuliah that don't have jadwal yet
+ * Using genetic algorithm with proper class division based on theory schedules
  * @param preferredDay - Optional preferred day for scheduling
  * @returns Promise<ServiceResponse<any>> Response containing all generated schedules
  */
@@ -787,24 +854,69 @@ export async function generateAllAvailableSchedules(
     preferredDay?: string
 ): Promise<ServiceResponse<any>> {
     try {
-        // First, get the count of available matakuliah
+        // Get current semester and year
+        const { semester, tahun } =
+            jadwalGeneticService.getCurrentSemesterAndYear();
+
+        // Get all practical courses (isTeori = false) that don't have schedules yet
         const existingSchedules =
             await jadwalGeneticService.getExistingSchedules();
-        const allMatakuliah = await prisma.matakuliah.findMany({
-            select: { id: true, nama: true },
+
+        const semesterFilter =
+            semester === SEMESTER.GANJIL
+                ? [1, 3, 5, 7] // Ganjil semesters
+                : [2, 4, 6, 8]; // Genap semesters
+
+        const allPracticalMatakuliah = await prisma.matakuliah.findMany({
+            where: {
+                isTeori: false, // Only practical courses
+                semester: {
+                    in: semesterFilter,
+                },
+            },
+            select: {
+                id: true,
+                nama: true,
+                semester: true,
+                bidangMinat: true,
+                isTeori: true,
+            },
         });
 
         // Filter out matakuliah that already have schedules
-        const availableMatakuliah = allMatakuliah.filter(
+        const availablePracticalMatakuliah = allPracticalMatakuliah.filter(
             (mk) =>
                 !existingSchedules.some(
                     (existing) => existing.matakuliahId === mk.id
                 )
         );
 
-        if (availableMatakuliah.length === 0) {
+        if (availablePracticalMatakuliah.length === 0) {
             return BadRequestWithMessage(
-                "No available matakuliah found. All matakuliah already have schedules."
+                "No available practical courses found. All practical courses already have schedules."
+            );
+        }
+
+        // Get theory course schedules to determine class structure and assign dosen/students
+        const theorySchedules = await prisma.jadwal.findMany({
+            where: {
+                semester,
+                tahun,
+                deletedAt: null,
+                matakuliah: {
+                    isTeori: true,
+                },
+            },
+            include: {
+                matakuliah: true,
+                mahasiswa: true,
+                dosen: true,
+            },
+        });
+
+        if (theorySchedules.length === 0) {
+            return BadRequestWithMessage(
+                "No theory course schedules found. Please create theory course schedules first."
             );
         }
 
@@ -813,16 +925,17 @@ export async function generateAllAvailableSchedules(
             ? (preferredDay.toUpperCase() as any)
             : undefined;
 
-        // Generate schedules for ALL available matakuliah using the dedicated function
-        const schedules =
-            await jadwalGeneticService.generateSchedulesForAllAvailableMatakuliah(
-                dayFilter
-            );
+        // Generate practical course schedules using genetic algorithm
+        const schedules = await jadwalGeneticService.generatePracticalSchedules(
+            availablePracticalMatakuliah,
+            theorySchedules,
+            dayFilter
+        );
 
         // If no valid schedules could be generated, return early
         if (schedules.length === 0) {
             return BadRequestWithMessage(
-                "No schedules could be generated. This could be due to: no valid lecturer-course combinations based on bidang minat, no available time slots, or other scheduling constraints."
+                "No practical course schedules could be generated. This could be due to: no valid lecturer-course combinations, no available time slots, or other scheduling constraints."
             );
         }
 
@@ -841,9 +954,39 @@ export async function generateAllAvailableSchedules(
 
         // Save each schedule and generate meetings
         const savedResults = await Promise.all(
-            schedules.map(async (schedule, index) => {
+            schedules.map(async (schedule: any, index: number) => {
                 try {
-                    return await jadwalGeneticService.saveSchedule(schedule);
+                    const savedSchedule =
+                        await jadwalGeneticService.saveSchedule(schedule);
+
+                    // Generate 12 meeting dates for this schedule using helper function
+                    if (savedSchedule.jadwal) {
+                        const meetingDates = await createMeetingDates(
+                            savedSchedule.jadwal.id
+                        );
+
+                        // Create meeting records (limit to 12 meetings)
+                        const meetingsToCreate = meetingDates.slice(0, 12);
+                        await Promise.all(
+                            meetingsToCreate.map(
+                                async (
+                                    tanggal: string,
+                                    meetingIndex: number
+                                ) => {
+                                    await prisma.meeting.create({
+                                        data: {
+                                            id: ulid(),
+                                            jadwalId: savedSchedule.jadwal.id,
+                                            tanggal,
+                                            pertemuan: meetingIndex + 1,
+                                        },
+                                    });
+                                }
+                            )
+                        );
+                    }
+
+                    return savedSchedule;
                 } catch (saveError) {
                     Logger.error(
                         `Error saving schedule ${schedule.id}: ${saveError}`
@@ -855,18 +998,20 @@ export async function generateAllAvailableSchedules(
 
         // Filter out failed saves and extract jadwal records
         const successfulSaves = savedResults.filter(
-            (result) => result !== null
+            (result: any) => result !== null
         );
-        const savedSchedules = successfulSaves.map((result) => result.jadwal);
+        const savedSchedules = successfulSaves.map(
+            (result: any) => result.jadwal
+        );
 
         // Get the names of matakuliah that were successfully scheduled
         const scheduledMatakuliahIds = savedSchedules.map(
-            (schedule) => schedule.matakuliahId
+            (schedule: any) => schedule.matakuliahId
         );
-        const scheduledMatakuliah = allMatakuliah.filter((mk) =>
+        const scheduledMatakuliah = allPracticalMatakuliah.filter((mk) =>
             scheduledMatakuliahIds.includes(mk.id)
         );
-        const unscheduledMatakuliah = availableMatakuliah.filter(
+        const unscheduledMatakuliah = availablePracticalMatakuliah.filter(
             (mk) => !scheduledMatakuliahIds.includes(mk.id)
         );
 
@@ -874,11 +1019,13 @@ export async function generateAllAvailableSchedules(
         const response = {
             schedules: savedSchedules,
             summary: {
-                totalAvailableMatakuliah: availableMatakuliah.length,
+                totalAvailableMatakuliah: availablePracticalMatakuliah.length,
                 totalGenerated: schedules.length,
                 totalSaved: savedSchedules.length,
                 successRate: Math.round(
-                    (savedSchedules.length / availableMatakuliah.length) * 100
+                    (savedSchedules.length /
+                        availablePracticalMatakuliah.length) *
+                        100
                 ),
             },
             scheduledMatakuliah: scheduledMatakuliah.map((mk) => ({
@@ -890,7 +1037,7 @@ export async function generateAllAvailableSchedules(
                 nama: mk.nama,
                 reason: "Could not find valid time slot or lecturer combination",
             })),
-            fitnessScores: schedules.map((s) => ({
+            fitnessScores: schedules.map((s: any) => ({
                 matakuliahId: s.matakuliahId,
                 fitness: s.fitness,
             })),
@@ -903,12 +1050,15 @@ export async function generateAllAvailableSchedules(
             generationStats: {
                 averageFitness:
                     Math.round(
-                        (schedules.reduce((sum, s) => sum + s.fitness, 0) /
+                        (schedules.reduce(
+                            (sum: number, s: any) => sum + s.fitness,
+                            0
+                        ) /
                             schedules.length) *
                             100
                     ) / 100,
-                bestFitness: Math.max(...schedules.map((s) => s.fitness)),
-                worstFitness: Math.min(...schedules.map((s) => s.fitness)),
+                bestFitness: Math.max(...schedules.map((s: any) => s.fitness)),
+                worstFitness: Math.min(...schedules.map((s: any) => s.fitness)),
             },
             timestamp: new Date().toISOString(),
         };
@@ -1695,42 +1845,6 @@ export async function createTeori(
         let assignedMahasiswaIds = data.mahasiswaIds || [];
         let assignedDosenIds = data.dosenIds || [];
 
-        const existingSchedules =
-            await jadwalGeneticService.getExistingSchedules();
-
-        if (!existingSchedules)
-            return BadRequestWithMessage("Tidak ada Jadwal yang ditemukan!");
-
-        const scheduleForValidation = {
-            id: data.id,
-            matakuliahId: data.matakuliahId,
-            ruanganId: data.ruanganId,
-            shiftId: data.shiftId,
-            dosenIds: assignedDosenIds,
-            hari: data.hari,
-            semester: isGanjilSemester() ? SEMESTER.GENAP : SEMESTER.GANJIL,
-            tahun: getCurrentAcademicYear(),
-            mahasiswaIds: assignedMahasiswaIds,
-            asistenLabIds: data.asistenLabIds || [],
-            fitness: 0,
-        };
-
-        const isConflict = jadwalGeneticService.hasScheduleConflicts(
-            scheduleForValidation,
-            existingSchedules
-        );
-
-        if (isConflict) {
-            if (!data.isOverride)
-                return {
-                    status: false,
-                    err: {
-                        message: "Terjadi Konflik dengan jadwal lainnya!",
-                        code: 409,
-                    },
-                };
-        }
-
         const { dosenIds, mahasiswaIds, asistenLabIds, ...jadwalData } = data;
 
         const jadwal = await prisma.jadwal.create({
@@ -1765,10 +1879,7 @@ export async function createTeori(
             },
         });
 
-        const meetingDates = await jadwalGeneticService.generateMeetingDates(
-            jadwal.id,
-            12
-        );
+        const meetingDates = await createMeetingDates(jadwal.id);
 
         // Create meeting records
         await Promise.all(

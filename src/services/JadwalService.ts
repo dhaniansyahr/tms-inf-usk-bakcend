@@ -1918,22 +1918,25 @@ export async function deleteAll(): Promise<ServiceResponse<{}>> {
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }
+
 export async function checkHasJadwalTeori(): Promise<ServiceResponse<{}>> {
     try {
-        const jadwalTeori = await prisma.jadwal.findMany({
+        const jadwalTeoriCount = await prisma.jadwal.count({
             where: {
                 matakuliah: {
                     isTeori: true,
                 },
+                deletedAt: null,
             },
         });
 
-        if (!jadwalTeori)
+        if (jadwalTeoriCount === 0) {
             return BadRequestWithMessage("Belum ada Jadwal Teori!");
+        }
 
         return {
             status: true,
-            data: jadwalTeori.length > 0,
+            data: true,
         };
     } catch (error) {
         Logger.error(`JadwalService.checkHasJadwalTeori : ${error}`);

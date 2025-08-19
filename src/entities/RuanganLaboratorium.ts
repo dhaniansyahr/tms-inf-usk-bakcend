@@ -5,6 +5,7 @@ export interface RuanganLaboratoriumDTO {
     namaKepalaLab: string;
     nipKepalaLab: string;
     histroyKepalaLabId: string;
+    kapasitas: number;
 }
 
 export interface AssignKepalaLabDTO {

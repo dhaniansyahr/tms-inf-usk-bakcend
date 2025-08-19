@@ -261,6 +261,8 @@ model RuanganLaboratorium {
   lokasi             String
   namaKepalaLab      String?
   nipKepalaLab       String?
+  kapasitas          Int       @default(25)
+  isLab              Boolean   @default(false)
   isActive           Boolean   @default(true)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt

@@ -50,18 +50,6 @@ export async function seedMataKuliah(prisma: PrismaClient) {
                     isTeori: isTeori,
                 },
             });
-
-            // Find and assign dosen pengampu if specified in Excel
-            // const dosenPengampu = await prisma.dosen.findFirst();
-            // if (dosenPengampu) {
-            //     await prisma.dosenPengampuMK.create({
-            //         data: {
-            //             id: ulid(),
-            //             dosenId: dosenPengampu.id,
-            //             matakuliahId: matakuliah.id,
-            //         },
-            //     });
-            // }
         }
 
         console.log(`${matakuliahData.length} Mata Kuliah seeded`);

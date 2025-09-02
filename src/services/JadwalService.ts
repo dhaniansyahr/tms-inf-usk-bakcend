@@ -1930,13 +1930,9 @@ export async function checkHasJadwalTeori(): Promise<ServiceResponse<{}>> {
             },
         });
 
-        if (jadwalTeoriCount === 0) {
-            return BadRequestWithMessage("Belum ada Jadwal Teori!");
-        }
-
         return {
             status: true,
-            data: true,
+            data: jadwalTeoriCount > 0,
         };
     } catch (error) {
         Logger.error(`JadwalService.checkHasJadwalTeori : ${error}`);

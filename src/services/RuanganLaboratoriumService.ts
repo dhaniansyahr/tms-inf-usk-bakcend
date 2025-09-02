@@ -178,13 +178,6 @@ export async function assignKepalaLab(
     } catch (err) {
         Logger.error(`RuanganLaboratoriumService.assignKepalaLab : ${err}`);
 
-        if (
-            err instanceof Error &&
-            err.message.includes("Record to update not found")
-        ) {
-            return INVALID_ID_SERVICE_RESPONSE;
-        }
-
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }
